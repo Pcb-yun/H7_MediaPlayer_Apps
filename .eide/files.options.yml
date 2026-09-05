@@ -1,0 +1,30 @@
+##########################################################################################
+#                        Append Compiler Options For Source Files
+##########################################################################################
+
+# syntax:
+#   <your pattern>: <compiler options>
+# For get pattern syntax, please refer to: https://www.npmjs.com/package/micromatch
+#
+# examples:
+#   'main.cpp':           --cpp11 -Og ...
+#   'src/*.c':            -gnu -O2 ...
+#   'src/lib/**/*.cpp':   --cpp11 -Os ...
+#   '!Application/*.c':   -O0
+#   '**/*.c':             -O2 -gnu ...
+
+version: "2.1"
+options:
+    H7_MediaPlayer:
+        files: {}
+        virtualPathFiles:
+            <virtual_root>/Application/User/Core/crc.c: ""
+            <virtual_root>/Application/User/Core/dma.c: ""
+            <virtual_root>/Application/User/Core/dma2d.c: ""
+            <virtual_root>/Application/User/Core/sai.c: ""
+            <virtual_root>/Application/User/Core/spi.c: ""
+            <virtual_root>/Drivers/STM32H7xx_HAL_Driver/stm32h7xx_hal_crc.c: ""
+            <virtual_root>/Drivers/STM32H7xx_HAL_Driver/stm32h7xx_hal_crc_ex.c: ""
+            <virtual_root>/Drivers/STM32H7xx_HAL_Driver/stm32h7xx_hal_dma2d.c: ""
+            <virtual_root>/Drivers/STM32H7xx_HAL_Driver/stm32h7xx_hal_sai.c: ""
+            <virtual_root>/Drivers/STM32H7xx_HAL_Driver/stm32h7xx_hal_sai_ex.c: ""

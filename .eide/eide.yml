@@ -1,0 +1,449 @@
+version: "4.1"
+name: H7_MediaPlayer
+type: ARM
+deviceName: null
+packDir: null
+srcDirs: []
+virtualFolder:
+  name: <virtual_root>
+  files: []
+  folders:
+    - name: Application
+      files: []
+      folders:
+        - name: MDK-ARM
+          files:
+            - path: MDK-ARM/startup_stm32h723xx.s
+            - path: MDK-ARM/armlib_lock_glue.c
+          folders: []
+        - name: User
+          files: []
+          folders:
+            - name: Core
+              files:
+                - path: Core/Src/main.c
+                - path: Core/Src/gpio.c
+                - path: Core/Src/freertos.c
+                - path: Core/Src/bdma.c
+                - path: Core/Src/crc.c
+                - path: Core/Src/dma.c
+                - path: Core/Src/dma2d.c
+                - path: Core/Src/iwdg.c
+                - path: Core/Src/octospi.c
+                - path: Core/Src/sai.c
+                - path: Core/Src/sdmmc.c
+                - path: Core/Src/spi.c
+                - path: Core/Src/tim.c
+                - path: Core/Src/usart.c
+                - path: Core/Src/stm32h7xx_it.c
+                - path: Core/Src/stm32h7xx_hal_msp.c
+                - path: Core/Src/stm32h7xx_hal_timebase_tim.c
+              folders: []
+            - name: FATFS
+              files: []
+              folders:
+                - name: Target
+                  files:
+                    - path: FATFS/Target/bsp_driver_sd.c
+                    - path: FATFS/Target/sd_diskio.c
+                  folders: []
+                - name: App
+                  files:
+                    - path: FATFS/App/fatfs.c
+                  folders: []
+            - name: LIBJPEG
+              files: []
+              folders:
+                - name: App
+                  files:
+                    - path: LIBJPEG/App/libjpeg.c
+                  folders: []
+                - name: Target
+                  files:
+                    - path: LIBJPEG/Target/jdata_conf.c
+                  folders: []
+    - name: Drivers
+      files: []
+      folders:
+        - name: STM32H7xx_HAL_Driver
+          files:
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_tim.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_tim_ex.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_cortex.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_crc.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_crc_ex.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_rcc.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_rcc_ex.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_flash.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_flash_ex.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_gpio.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_hsem.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_dma.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_dma_ex.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_mdma.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pwr.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pwr_ex.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_i2c.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_i2c_ex.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_exti.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_dma2d.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_iwdg.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_ospi.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_sai.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_sai_ex.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_ll_sdmmc.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_ll_delayblock.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_sd.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_sd_ex.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_mmc.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_mmc_ex.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_spi.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_spi_ex.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_uart.c
+            - path: Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_uart_ex.c
+          folders: []
+        - name: CMSIS
+          files:
+            - path: Core/Src/system_stm32h7xx.c
+          folders: []
+    - name: Middlewares
+      files: []
+      folders:
+        - name: FatFs
+          files:
+            - path: Middlewares/Third_Party/FatFs/src/diskio.c
+            - path: Middlewares/Third_Party/FatFs/src/ff.c
+            - path: Middlewares/Third_Party/FatFs/src/ff_gen_drv.c
+            - path: Middlewares/Third_Party/FatFs/src/option/syscall.c
+            - path: Middlewares/Third_Party/FatFs/src/option/cc936.c
+          folders: []
+        - name: FreeRTOS
+          files:
+            - path: Middlewares/Third_Party/FreeRTOS/Source/portable/Common/mpu_wrappers_v2.c
+            - path: Middlewares/Third_Party/FreeRTOS/Source/croutine.c
+            - path: Middlewares/Third_Party/FreeRTOS/Source/event_groups.c
+            - path: Middlewares/Third_Party/FreeRTOS/Source/list.c
+            - path: Middlewares/Third_Party/FreeRTOS/Source/queue.c
+            - path: Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c
+            - path: Middlewares/Third_Party/FreeRTOS/Source/tasks.c
+            - path: Middlewares/Third_Party/FreeRTOS/Source/timers.c
+            - path: Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2/cmsis_os2.c
+            - path: Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c
+            - path: Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F/port.c
+          folders: []
+        - name: LibJPEG
+          files:
+            - path: Middlewares/Third_Party/LibJPEG/source/jcapimin.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jcapistd.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jdapimin.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jdapistd.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jcomapi.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jcparam.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jctrans.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jdtrans.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jcinit.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jcmaster.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jcmainct.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jcprepct.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jccoefct.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jccolor.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jcsample.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jcdctmgr.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jfdctint.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jfdctfst.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jfdctflt.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jchuff.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jcarith.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jcmarker.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jdatadst.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jdmaster.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jdinput.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jdmainct.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jdcoefct.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jdpostct.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jdmarker.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jdhuff.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jdarith.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jddctmgr.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jidctint.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jidctfst.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jidctflt.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jdsample.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jdcolor.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jdmerge.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jquant1.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jquant2.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jdatasrc.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jaricom.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jerror.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jmemmgr.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jutils.c
+            - path: Middlewares/Third_Party/LibJPEG/source/jmemnobs.c
+          folders: []
+    - name: ansi_art
+      files:
+        - path: Applications/ANSI_Art/Art_Data.c
+        - path: Applications/ANSI_Art/Art_show.c
+      folders: []
+    - name: auido
+      files:
+        - path: Applications/Audio/decoder/audio_flac.c
+        - path: Applications/Audio/decoder/audio_mp3.c
+        - path: Applications/Audio/decoder/audio_wav.c
+        - path: Applications/Audio/lyric/audio_lrc.c
+        - path: Applications/Audio/ui/audio_tui.c
+        - path: Applications/Audio/audio_port.c
+      folders: []
+    - name: littershell
+      files:
+        - path: Applications/letter_shell/fs_support/shell_fs.c
+        - path: Applications/letter_shell/log/log.c
+        - path: Applications/letter_shell/shell_enhance/shell_cmd_group.c
+        - path: Applications/letter_shell/src/shell.c
+        - path: Applications/letter_shell/src/shell_cmd_list.c
+        - path: Applications/letter_shell/src/shell_companion.c
+        - path: Applications/letter_shell/src/shell_ext.c
+        - path: Applications/letter_shell/shell_port.c
+      folders: []
+    - name: games
+      files:
+        - path: Applications/letter_shell/game/2048/2048.c
+        - path: Applications/letter_shell/game/ASCII_Patrol/assets.cpp
+        - path: Applications/letter_shell/game/ASCII_Patrol/conf.cpp
+        - path: Applications/letter_shell/game/ASCII_Patrol/game_ap.cpp
+        - path: Applications/letter_shell/game/ASCII_Patrol/gameover.cpp
+        - path: Applications/letter_shell/game/ASCII_Patrol/inter.cpp
+        - path: Applications/letter_shell/game/ASCII_Patrol/manual.cpp
+        - path: Applications/letter_shell/game/ASCII_Patrol/menu.cpp
+        - path: Applications/letter_shell/game/ASCII_Patrol/spec_mcu.cpp
+        - path: Applications/letter_shell/game/ASCII_Patrol/temp.cpp
+        - path: Applications/letter_shell/game/ASCII_Patrol/twister.cpp
+        - path: Applications/letter_shell/game/snake/snake.c
+        - path: Applications/letter_shell/game/snake/snake_tiny.c
+        - path: Applications/letter_shell/game/game.c
+      folders: []
+    - name: lvgl
+      files:
+        - path: Applications/lvgl/lvgl_port.c
+        - path: Applications/lvgl/lvgl_user.c
+      folders: []
+    - name: xy_modem
+      files:
+        - path: Applications/XY_Modem/xymodem_port.c
+        - path: Drivers/User/XYMODEM/xymodem.c
+      folders: []
+    - name: boot
+      files:
+        - path: Drivers/User/BOOT/boot.c
+      folders: []
+    - name: fs_misc
+      files:
+        - path: Drivers/User/FS_MISC/cat.c
+        - path: Drivers/User/FS_MISC/hexdump.c
+      folders: []
+    - name: lcd
+      files:
+        - path: Drivers/User/LCD/lcd_port.c
+        - path: Drivers/User/LCD/lcd_spi_154.c
+      folders: []
+    - name: os_misc
+      files:
+        - path: Drivers/User/OS_MISC/get_res.c
+        - path: Drivers/User/OS_MISC/message.c
+      folders: []
+    - name: rtos
+      files:
+        - path: Drivers/User/RTOS/rtos_utils.c
+      folders: []
+    - name: w25qxx
+      files:
+        - path: Applications/W25Q64/driver_w25qxx_interface.c
+        - path: Applications/W25Q64/w25q64_port.c
+        - path: Drivers/User/W25QXX/src/driver_w25qxx.c
+      folders: []
+    - name: ::CMSIS
+      files: []
+      folders: []
+dependenceList: []
+outDir: build
+miscInfo:
+  uid: 07c0cc6922808fa9af4a54d4b22b35f0
+targets:
+  H7_MediaPlayer:
+    cppPreprocessAttrs:
+      defineList:
+        - USE_PWR_LDO_SUPPLY
+        - USE_HAL_DRIVER
+        - STM32H723xx
+        - STM32_THREAD_SAFE_STRATEGY=4
+        - USE_WG=0
+      incList:
+        - Core/Inc
+        - FATFS/Target
+        - FATFS/App
+        - LIBJPEG/App
+        - LIBJPEG/Target
+        - Drivers/STM32H7xx_HAL_Driver/Inc
+        - Drivers/STM32H7xx_HAL_Driver/Inc/Legacy
+        - Middlewares/Third_Party/FreeRTOS/Source/include
+        - Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS_V2
+        - Middlewares/Third_Party/FreeRTOS/Source/portable/RVDS/ARM_CM4F
+        - Drivers/CMSIS/RTOS2/Include
+        - Middlewares/Third_Party/FatFs/src
+        - Middlewares/Third_Party/LibJPEG/include
+        - Drivers/CMSIS/Device/ST/STM32H7xx/Include
+        - Drivers/CMSIS/Include
+        - Applications/ANSI_Art
+        - Applications/Audio
+        - Applications/Audio/decoder
+        - Applications/Audio/lyric
+        - Applications/Audio/ui
+        - Applications/letter_shell
+        - Applications/letter_shell/fs_support
+        - Applications/letter_shell/game
+        - Applications/letter_shell/game/ASCII_Patrol
+        - Applications/letter_shell/game/snake
+        - Applications/letter_shell/log
+        - Applications/letter_shell/shell_enhance
+        - Applications/letter_shell/src
+        - Applications/lvgl
+        - Applications/W25Q64
+        - Applications/XY_Modem
+        - Drivers/User/BOOT
+        - Drivers/User/DR_LIBS
+        - Drivers/User/FS_MISC
+        - Drivers/User/LCD
+        - Drivers/User/LVGL/src
+        - Drivers/User/OS_MISC
+        - Drivers/User/RTOS
+        - Drivers/User/W25QXX/interface
+        - Drivers/User/W25QXX/src
+        - Drivers/User/XYMODEM
+        - .cmsis/include
+        - MDK-ARM/RTE/_H7_MediaPlayer
+      libList: []
+    excludeList: []
+    settings:
+      debugger: cortex-debug
+    toolchain: AC5
+    toolchainConfigMap:
+      AC5:
+        archExtensions: ""
+        cpuType: Cortex-M7
+        floatingPointHardware: double
+        options:
+          version: 4
+          afterBuildTasks: []
+          asm-compiler:
+            defines: []
+          beforeBuildTasks: []
+          c/cpp-compiler:
+            CXX_FLAGS: --diag_suppress=1 --diag_suppress=1295
+            C_FLAGS: --diag_suppress=1 --diag_suppress=1295
+            c99-mode: true
+            one-elf-section-per-function: true
+            optimization: level-0
+            warnings: all-warnings
+          global:
+            output-debug-info: enable
+            use-microLIB: false
+          linker:
+            $outputTaskExcludes:
+              - .bin
+            misc-controls: --keep shellCommand*
+            output-format: elf
+            ro-base: ""
+            rw-base: ""
+            xo-base: ""
+        scatterFilePath: MDK-ARM/stm32h723xg_flash.sct
+        storageLayout:
+          RAM:
+            - id: 1
+              isChecked: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              noInit: false
+              tag: RAM
+            - id: 2
+              isChecked: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              noInit: false
+              tag: RAM
+            - id: 3
+              isChecked: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              noInit: false
+              tag: RAM
+            - id: 1
+              isChecked: true
+              mem:
+                size: "0x20000"
+                startAddr: "0x20000000"
+              noInit: false
+              tag: IRAM
+            - id: 2
+              isChecked: true
+              mem:
+                size: "0x50000"
+                startAddr: "0x24000000"
+              noInit: false
+              tag: IRAM
+          ROM:
+            - id: 1
+              isChecked: false
+              isStartup: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              tag: ROM
+            - id: 2
+              isChecked: false
+              isStartup: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              tag: ROM
+            - id: 3
+              isChecked: false
+              isStartup: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              tag: ROM
+            - id: 1
+              isChecked: true
+              isStartup: true
+              mem:
+                size: "0x100000"
+                startAddr: "0x8000000"
+              tag: IROM
+            - id: 2
+              isChecked: false
+              isStartup: false
+              mem:
+                size: "0x0"
+                startAddr: "0x0"
+              tag: IROM
+        useCustomScatterFile: true
+    uploadConfigMap:
+      JLink:
+        baseAddr: ""
+        bin: ""
+        cpuInfo:
+          cpuName: "null"
+          vendor: "null"
+        otherCmds: ""
+        proType: 1
+        speed: 8000
+      OpenOCD:
+        baseAddr: "0x08000000"
+        bin: ""
+        interface: cmsis-dap
+        target: stm32h7x
+    uploader: OpenOCD

@@ -1,0 +1,15 @@
+[submodule "Drivers/User/XYMODEM"]
+	path = Drivers/User/XYMODEM
+	url = https://github.com/ZeHHHHH/Flexible-XYmodem.git
+	branch = main
+[submodule "Drivers/User/LVGL"]
+	path = Drivers/User/LVGL
+	url = https://github.com/lvgl/lvgl.git
+[submodule "Drivers/User/DR_LIBS"]
+	path = Drivers/User/DR_LIBS
+	url = https://github.com/mackron/dr_libs.git
+	branch = master
+[submodule "Drivers/User/W25QXX"]
+	path = Drivers/User/W25QXX
+	url = https://github.com/libdriver/w25qxx.git
+	branch = main
