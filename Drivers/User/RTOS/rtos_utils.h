@@ -22,7 +22,8 @@ extern "C" {
     "  queue    Show queue status\r\n" \
     "  mutex    Show mutex status\r\n" \
     "  event    Show event flags status\r\n" \
-    "  error    Manually trigger error"
+    "  error    Manually trigger error\r\n" \
+    "  update   Update system firmware"
 
 #ifdef __cplusplus
 }

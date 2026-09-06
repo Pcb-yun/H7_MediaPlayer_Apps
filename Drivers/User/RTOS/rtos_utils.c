@@ -10,6 +10,8 @@
 #include "cmsis_os2.h"
 #include "stm32h7xx_hal.h"
 #include "Events.h"
+#include "boot.h"
+#include "fatfs.h"
 #include <string.h>
 
 
@@ -259,6 +261,77 @@ static void OS_Error(void) {
 }
 
 /**
+ * @brief 校验文件名是否为 8.3 短文件名格式
+ * @param path 待校验文件名
+ * @retval 1 合法；0 非法
+ */
+static uint8_t Is_Valid_83_Name(const uint8_t *path) {
+    uint8_t mainLen = 0;    // 主文件名长度
+    uint8_t extLen = 0;     // 扩展名长度
+    const uint8_t *p = path;
+
+    if(p == NULL || *p == '\0') {
+        return 0;
+    }
+
+    // 校验主文件名（1~8 个字符，至 '.')
+    while(*p != '\0' && *p != '.') {
+        if(!((*p >= '0' && *p <= '9') || (*p >= 'A' && *p <= 'Z') ||
+             (*p >= 'a' && *p <= 'z') || *p == '_' || *p == '-')) {
+            return 0;
+        }
+        mainLen++;
+        p++;
+    }
+    if(mainLen == 0 || mainLen > 8) {
+        return 0;
+    }
+
+    // 校验扩展名（1~3 个字符，可省略）
+    if(*p == '.') {
+        p++;
+        while(*p != '\0') {
+            if(!((*p >= '0' && *p <= '9') || (*p >= 'A' && *p <= 'Z') ||
+                 (*p >= 'a' && *p <= 'z') || *p == '_' || *p == '-')) {
+                return 0;
+            }
+            extLen++;
+            if(extLen > 3) {
+                return 0;
+            }
+            p++;
+        }
+        if(extLen == 0) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/**
+ * @brief 系统更新函数
+ * @param path 更新文件名称
+ */
+static void OS_Update(uint8_t *path) {
+    if(!Is_Valid_83_Name(path)) {
+        logPrintln("invalid file name, must be 8.3 format");
+        return;
+    }
+    if(!FS_Check()) {
+        logPrintln("file system is not mounted");
+        return;
+    }
+    // 以只读方式尝试打开，确认文件存在
+    FIL *fp = NULL;
+    if(F_open(&fp, path, FA_READ) != FR_OK) {
+        logPrintln("file %s not found", path);
+        return;
+    }
+    F_close(&fp);
+    BootShared_Update(path);
+}
+
+/**
  * @brief OS命令处理函数
  * @param argc 参数数量
  * @param argv 参数列表
@@ -282,6 +355,9 @@ static void OS_Tool_Shell(int argc, char *argv[]) {
         Event_Info();
     } else if(strcmp(argv[1], "error") == 0) {
         OS_Error();
+    } else if(strcmp(argv[1], "update") == 0) {
+        if (argc != 3) logPrintln("Usage: os update PATH");
+        OS_Update((uint8_t *)argv[2]);
     } else {
         logPrintln("Invalid command: %s\r\n"
                 OS_HELP, argv[1]);

@@ -32,6 +32,7 @@
 #include "shell.h"
 #include "sdmmc.h"
 #include "fatfs.h"
+#include "boot.h"
 
 /* USER CODE END Includes */
 
@@ -268,6 +269,11 @@ void Sys_Init_Task(void *argument)
   my_printf("[warn] Debug Mode, Watch Dog Disabled.\r\n");
 #endif
 
+  SHOW_DMESG(dmesg_wait, "Initialize BootShared");
+  extern void BootShared_Init(void);
+  void BootShared_Init();
+  SHOW_DMESG(dmesg_ok, NULL);
+
   SHOW_DMESG(dmesg_wait, "Initialize Shell");
   extern void userShellInit(void);
   userShellInit();
@@ -311,7 +317,7 @@ void Sys_Init_Task(void *argument)
   Shell_New_Convo(&shell);
   osEventFlagsSet(System_StatusHandle, SYS_INIT_COMPLETE);
 
-	vTaskDelete(NULL);
+  vTaskDelete(NULL);
   /* USER CODE END Sys_Init_Task */
 }
 
@@ -319,4 +325,3 @@ void Sys_Init_Task(void *argument)
 /* USER CODE BEGIN Application */
 
 /* USER CODE END Application */
-
