@@ -332,6 +332,27 @@ static void OS_Update(uint8_t *path) {
 }
 
 /**
+ * @brief 重启系统
+ */
+static void OS_Reboot(void) {
+    osEventFlagsSet(System_StatusHandle, APP_NEED_USART);
+    logPrintln("WARNING: System will be reboot, Would you like to proceed? (y/n)");
+
+    uint8_t byte;
+    while (1) {
+        if (shell.read((char*)&byte, 1)) {
+            if (byte == 'y') {
+                HAL_NVIC_SystemReset();
+            } else {
+                osEventFlagsClear(System_StatusHandle, APP_NEED_USART);
+                break;
+            }
+        }
+        osDelay(20);
+    }
+}
+
+/**
  * @brief OS命令处理函数
  * @param argc 参数数量
  * @param argv 参数列表
@@ -353,6 +374,8 @@ static void OS_Tool_Shell(int argc, char *argv[]) {
         Mutex_Info();
     } else if(strcmp(argv[1], "event") == 0) {
         Event_Info();
+    } else if(strcmp(argv[1], "reboot") == 0) {
+        OS_Reboot();
     } else if(strcmp(argv[1], "error") == 0) {
         OS_Error();
     } else if(strcmp(argv[1], "update") == 0) {

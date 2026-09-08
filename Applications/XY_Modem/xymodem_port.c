@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 
 /* XYmodem 端口上下文 */
@@ -33,7 +34,7 @@ static xym_sta_t xymodem_port_recv_data(uint8_t *data, const uint32_t cnt, const
 uint16_t xymodem_port_crc16(const uint8_t *data, const uint32_t cnt);
 
 /**
- * @brief  取路径中的文件名（去除目录前缀）
+ * @brief  取路径中的文件名
  * @param  path 路径
  * @return 文件名指针
  */
@@ -45,13 +46,13 @@ static const char *xym_file_basename(const char *path) {
 }
 
 /**
- * @brief  编码 Ymodem 文件信息包：文件名\0文件大小
+ * @brief  编码 Ymodem 文件信息包
  * @param  buff 数据缓冲（128 Bytes）
  * @param  name 文件名
  * @param  size 文件大小 (Bytes)
  */
 static void xym_file_encode(uint8_t *buff, const char *name, uint32_t size) {
-	uint16_t i = 0;
+	uint16_t i;
 	for (i = 0; name[i] && i < XYM_PKT_SIZE_128 - 16; ++i) {
 		buff[i] = (uint8_t)name[i];
 	}
@@ -60,7 +61,7 @@ static void xym_file_encode(uint8_t *buff, const char *name, uint32_t size) {
 }
 
 /**
- * @brief  解码 Ymodem 文件信息包：文件名\0文件大小
+ * @brief  解码 Ymodem 文件信息包
  * @param  buff 数据缓冲（128 Bytes）
  * @param  name 文件名输出
  * @param  size 文件大小输出 (Bytes)
@@ -78,7 +79,7 @@ static void xym_file_decode(const uint8_t *buff, char *name, uint32_t *size) {
 
 /**
  * @brief  删除文件（接收失败时清理残留）
- * @param  path 文件路径（utf8，相对路径基于 FatFS 当前目录）
+ * @param  path 文件路径
  */
 static void xym_file_remove(const char *path) {
 	TCHAR wpath[512];
@@ -105,13 +106,13 @@ static FRESULT xym_buf_flush(FIL *fp, const uint8_t *buf, uint32_t cnt) {
  * @retval enum xym_sta
  */
 static xym_sta_t xym_port_init(void) {
-	SHELL_ASSERT(shellGetCurrent(), return XYM_ERROR_HW);
 	if (port == NULL) {
 		port = pvPortMalloc(sizeof(struct XYM_Port_t));
 		SHELL_ASSERT(port, return XYM_ERROR_HW);
 	}
 	memset(port, 0, sizeof(struct XYM_Port_t));
 	port->shell = shellGetCurrent();
+	SHELL_ASSERT(port->shell, return XYM_ERROR_HW);
 
 	// 按空闲堆动态分配收发缓冲(512整数倍), 为系统保留XYMODEM_RESERVED_MEM
 	size_t free = xPortGetFreeHeapSize();
@@ -155,7 +156,6 @@ static void xym_port_deinit(void) {
 	}
 }
 
-
 #if XYMODEM_USE_XMODEM
 
 /**
@@ -163,7 +163,6 @@ static void xym_port_deinit(void) {
  */
 static void shell_sx(int argc, char *argv[]) {
 	if (argc < 2) { logPrintln("Usage: sx <file>"); return; }
-	if (!FS_Check()) { logPrintln("File system is not mounted"); return; }
 
 	FIL *fp = NULL;
 	if (F_open(&fp, (const uint8_t *)argv[1], FA_READ) != FR_OK) {
@@ -210,8 +209,7 @@ static void shell_sx(int argc, char *argv[]) {
 	xym_port_deinit();
 	osEventFlagsClear(System_StatusHandle, APP_NEED_USART);
 
-	if (sta == XYM_END) logPrintln("Xmodem send success, %lu bytes", (unsigned long)fsize);
-	else logPrintln("Xmodem send failed, code %d", (int)sta);
+	if (sta != XYM_END) logPrintln("Xmodem send failed, code %d", (int)sta);
 }
 SHELL_EXPORT_CMD(SHELL_CMD_PERMISSION(0)|SHELL_CMD_TYPE(SHELL_TYPE_CMD_MAIN)|SHELL_CMD_DISABLE_RETURN,
 sx, shell_sx, Send Xmodem);
@@ -221,7 +219,6 @@ sx, shell_sx, Send Xmodem);
  */
 static void shell_rx(int argc, char *argv[]) {
 	if (argc < 2) { logPrintln("Usage: rx <file>"); return; }
-	if (!FS_Check()) { logPrintln("File system is not mounted"); return; }
 
 	osEventFlagsSet(System_StatusHandle, APP_NEED_USART);
 	if (xym_port_init() != XYM_OK) {
@@ -267,12 +264,13 @@ static void shell_rx(int argc, char *argv[]) {
 	/* 收尾：写入残留数据并关闭文件 */
 	if (xym_buf_flush(fp, port->buffer, filled) != FR_OK) sta = XYM_ERROR_HW;
 	F_close(&fp);
-	if (sta != XYM_END) xym_file_remove(argv[1]);
 	xym_port_deinit();
 	osEventFlagsClear(System_StatusHandle, APP_NEED_USART);
 
-	if (sta == XYM_END) logPrintln("Xmodem receive success, %lu bytes", (unsigned long)received);
-	else logPrintln("Xmodem receive failed, code %d", (int)sta);
+	if (sta != XYM_END) {
+		xym_file_remove(argv[1]);
+		logPrintln("Xmodem receive failed, code %d", (int)sta);
+	}
 }
 SHELL_EXPORT_CMD(SHELL_CMD_PERMISSION(0)|SHELL_CMD_TYPE(SHELL_TYPE_CMD_MAIN)|SHELL_CMD_DISABLE_RETURN,
 rx, shell_rx, Receive Xmodem);
@@ -285,22 +283,7 @@ rx, shell_rx, Receive Xmodem);
  * @brief  Y协议发送
  */
 static void shell_sb(int argc, char *argv[]) {
-	if (argc < 2) { logPrintln("Usage: sb <file>"); return; }
-	if (!FS_Check()) { logPrintln("File system is not mounted"); return; }
-
-	FIL *fp = NULL;
-	if (F_open(&fp, (const uint8_t *)argv[1], FA_READ) != FR_OK) {
-		logPrintln("Fail to open %s", argv[1]);
-		return;
-	}
-
-	FILINFO fno;
-	TCHAR wpath[512];
-	utf8to16((const uint8_t *)argv[1], wpath, sizeof(wpath) / sizeof(TCHAR));
-	uint32_t fsize = 0;
-	if (f_stat(wpath, &fno) == FR_OK) {
-		fsize = (uint32_t)fno.fsize;
-	}
+	if (argc < 2) { logPrintln("Usage: sb <file1> [file2 ...]"); return; }
 
 	osEventFlagsSet(System_StatusHandle, APP_NEED_USART);
 	if (xym_port_init() != XYM_OK) {
@@ -313,20 +296,36 @@ static void shell_sb(int argc, char *argv[]) {
 	xym_sta_t sta = XYM_OK;
 	uint16_t len = 0;
 	uint32_t sent = 0;
+	uint32_t total_sent = 0;
 	UINT br = 0;
-	uint8_t first = 1;
+	int fi = 0;
+	bool all_ok = true;
 
-	while (1) {
-		if (first) {
-			/* 首包：文件信息包（文件名 + 文件大小） */
-			memset(port->buffer, 0, XYM_PKT_SIZE_128);
-			xym_file_encode(port->buffer, xym_file_basename(argv[1]), fsize);
-			sta = ymodem_transmit(&port->session, port->buffer, XYM_PKT_SIZE_128);
-			first = 0;
-			if (sta != XYM_OK) break;
-			continue;
+	/* Ymodem Batch：逐文件发送文件信息包 + 数据 + EOT */
+	for (fi = 1; fi < argc; ++fi) {
+		FIL *fp = NULL;
+		if (F_open(&fp, (const uint8_t *)argv[fi], FA_READ) != FR_OK) {
+			logPrintln("Fail to open %s", argv[fi]);
+			all_ok = false;
+			break;
 		}
-		if (sent < fsize) {
+
+		FILINFO fno;
+		TCHAR wpath[512];
+		utf8to16((const uint8_t *)argv[fi], wpath, sizeof(wpath) / sizeof(TCHAR));
+		uint32_t fsize = 0;
+		if (f_stat(wpath, &fno) == FR_OK) {
+			fsize = (uint32_t)fno.fsize;
+		}
+
+		/* 首包：文件信息包（文件名 + 文件大小） */
+		memset(port->buffer, 0, XYM_PKT_SIZE_128);
+		xym_file_encode(port->buffer, xym_file_basename(argv[fi]), fsize);
+		sta = ymodem_transmit(&port->session, port->buffer, XYM_PKT_SIZE_128);
+		if (sta != XYM_OK) { F_close(&fp); break; }
+
+		sent = 0;
+		while (sent < fsize) {
 			/* 读文件数据并发送 */
 			len = ((fsize - sent) > XYM_PKT_SIZE_1024) ? XYM_PKT_SIZE_1024 : (uint16_t)(fsize - sent);
 			if (f_read(fp, port->buffer, len, &br) != FR_OK) { sta = XYM_ERROR_HW; break; }
@@ -334,24 +333,27 @@ static void shell_sb(int argc, char *argv[]) {
 			sta = ymodem_transmit(&port->session, port->buffer, len);
 			if (sta != XYM_OK) break;
 			sent += len;
-		} else {
-			/* 数据发完：EOT 结束当前文件 */
-			sta = ymodem_transmit(&port->session, port->buffer, 0);
-			if (sta == XYM_FIL_SET) {
-				/* 再发空文件信息包，结束整个会话 */
-				memset(port->buffer, 0, XYM_PKT_SIZE_128);
-				sta = ymodem_transmit(&port->session, port->buffer, 0);
-			}
-			break;
 		}
+		F_close(&fp);
+		if (sta != XYM_OK) break;
+
+		/* 数据发完：EOT 结束当前文件 */
+		sta = ymodem_transmit(&port->session, port->buffer, 0);
+		total_sent += sent;
+		/* sta 为 XYM_FIL_SET（接收端期待下一个文件）或 XYM_END（会话结束）或错误 */
+		if (sta != XYM_FIL_SET) break;
 	}
 
-	F_close(&fp);
+	/* 所有文件发完：若接收端仍期待下一个文件，发空文件信息包结束整个会话 */
+	if (sta == XYM_FIL_SET) {
+		memset(port->buffer, 0, XYM_PKT_SIZE_128);
+		sta = ymodem_transmit(&port->session, port->buffer, 0);
+	}
+
 	xym_port_deinit();
 	osEventFlagsClear(System_StatusHandle, APP_NEED_USART);
 
-	if (sta == XYM_END) logPrintln("Ymodem send success, %lu bytes", (unsigned long)fsize);
-	else logPrintln("Ymodem send failed, code %d", (int)sta);
+	if (sta != XYM_END || !all_ok) logPrintln("Ymodem send failed, code %d", (int)sta);
 }
 SHELL_EXPORT_CMD(SHELL_CMD_PERMISSION(0)|SHELL_CMD_TYPE(SHELL_TYPE_CMD_MAIN)|SHELL_CMD_DISABLE_RETURN,
 sb, shell_sb, Send Ymodem);
@@ -360,8 +362,6 @@ sb, shell_sb, Send Ymodem);
  * @brief  Y协议接收
  */
 static void shell_rb(int argc, char *argv[]) {
-	if (!FS_Check()) { logPrintln("File system is not mounted"); return; }
-
 	osEventFlagsSet(System_StatusHandle, APP_NEED_USART);
 	if (xym_port_init() != XYM_OK) {
 		logPrintln("X/Y modem port init failed");
@@ -430,12 +430,13 @@ static void shell_rb(int argc, char *argv[]) {
 		if (xym_buf_flush(fp, port->buffer, filled) != FR_OK) sta = XYM_ERROR_HW;
 		F_close(&fp);
 	}
-	if (sta != XYM_END && last_name[0]) xym_file_remove(last_name);
 	xym_port_deinit();
 	osEventFlagsClear(System_StatusHandle, APP_NEED_USART);
 
-	if (sta == XYM_END) logPrintln("Ymodem receive success, %lu bytes", (unsigned long)received);
-	else logPrintln("Ymodem receive failed, code %d", (int)sta);
+	if (sta != XYM_END) {
+		if (last_name[0]) xym_file_remove(last_name);
+		logPrintln("Ymodem receive failed, code %d", (int)sta);
+	}
 }
 SHELL_EXPORT_CMD(SHELL_CMD_PERMISSION(0)|SHELL_CMD_TYPE(SHELL_TYPE_CMD_MAIN)|SHELL_CMD_DISABLE_RETURN,
 rb, shell_rb, Receive Ymodem);
@@ -443,7 +444,7 @@ rb, shell_rb, Receive Ymodem);
 #endif
 
 /**
- * @brief  硬件 CRC16 校验（CRC-16/XMODEM：poly 0x1021, init 0, 无反转）
+ * @brief  硬件 CRC16 校验
  * @param  data 数据
  * @param  cnt 数据长度 (Bytes)
  * @retval 16 位 CRC 结果
@@ -462,18 +463,19 @@ uint16_t xymodem_port_crc16(const uint8_t *data, const uint32_t cnt) {
 xym_sta_t xymodem_port_send_data(const uint8_t *data, const uint32_t cnt, const uint32_t tick) {
 	SHELL_ASSERT(port, return XYM_ERROR_HW);
 	uint32_t sent = 0;
+	uint32_t start = osKernelGetTickCount();
 
 	while (sent < cnt) {
-		uint32_t start = osKernelGetTickCount();
 		short n = port->shell->write((char *)&data[sent], cnt - sent);
-		if (n <= 0) {
-			/* 一字节都未发出，按单字节超时处理 */
-			if ((uint32_t)(osKernelGetTickCount() - start) >= tick) {
-				return XYM_ERROR_TIMEOUT;
-			}
+		if (n > 0) {
+			sent += n;
 			continue;
 		}
-		sent += n;
+
+		if ((uint32_t)(osKernelGetTickCount() - start) >= tick) {
+			return XYM_ERROR_TIMEOUT;
+		}
+		osDelay(1);
 	}
 	return XYM_OK;
 }
@@ -488,21 +490,19 @@ xym_sta_t xymodem_port_send_data(const uint8_t *data, const uint32_t cnt, const 
 xym_sta_t xymodem_port_recv_data(uint8_t *data, const uint32_t cnt, const uint32_t tick) {
 	SHELL_ASSERT(port, return XYM_ERROR_HW);
 	uint32_t recved = 0;
-	uint32_t n = 0;
+	uint32_t start = osKernelGetTickCount();
 
 	while (recved < cnt) {
-		uint32_t start = osKernelGetTickCount();
-		for (;;) {
-			n = port->shell->read((char *)&data[recved], cnt - recved);
-			if (n > 0) {
-				recved += n;
-				break;
-			}
-			/* 本次未读到任何字节，按单字节超时判断 */
-			if ((uint32_t)(osKernelGetTickCount() - start) >= tick) {
-				return XYM_ERROR_TIMEOUT;
-			}
+		uint32_t n = port->shell->read((char *)&data[recved], cnt - recved);
+		if (n > 0) {
+			recved += n;
+			continue;
 		}
+
+		if ((uint32_t)(osKernelGetTickCount() - start) >= tick) {
+			return XYM_ERROR_TIMEOUT;
+		}
+		osDelay(1);
 	}
 	return XYM_OK;
 }

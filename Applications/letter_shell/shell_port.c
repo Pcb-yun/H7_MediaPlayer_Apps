@@ -143,35 +143,3 @@ void Online_Check_Task(void *argument) {
     vTaskDelete(NULL);
 #endif
 }
-
-/**
- * @brief 软件重置
- * @param argc 参数数量
- * @param argv 参数列表
- */
-static void Sys_Reset(int argc, char *argv[]) {
-    if (argc > 1 && strcmp(argv[1], "-y") == 0) {
-        logPrintln("system will reset after 1 seconds");
-        osDelay(1000);
-        HAL_NVIC_SystemReset();
-    }
-    osEventFlagsSet(System_StatusHandle, APP_NEED_USART);
-    logPrintln("WARNING: System will be reset, Would you like to proceed? (y/n)");
-
-    uint8_t byte;
-    while (1) {
-        if (shell.read((char*)&byte, 1)) {
-            if (byte == 'y') {
-                logPrintln("system will reset after 1 seconds");
-                osDelay(1000);
-                HAL_NVIC_SystemReset();
-            } else {
-                osEventFlagsClear(System_StatusHandle, APP_NEED_USART);
-                break;
-            }
-        }
-        osDelay(20);
-    }
-}
-SHELL_EXPORT_CMD(SHELL_CMD_PERMISSION(0)|SHELL_CMD_TYPE(SHELL_TYPE_CMD_MAIN)|SHELL_CMD_DISABLE_RETURN,
-Reset, Sys_Reset, Rest System);
