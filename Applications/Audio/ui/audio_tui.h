@@ -13,9 +13,15 @@
 extern "C" {
 #endif /* __cplusplus */
 
-void tui_init(const char* path, const audio_meta_t* meta, uint8_t volume);
-void tui_update(uint32_t play_frames, uint8_t volume);
+
+void tui_init(const audio_meta_t* meta, uint8_t volume);
+void tui_update(const audio_time_t* time, uint8_t volume);
 void tui_clear(void);
+
+
+
+
+
 
 #ifdef __cplusplus
 }

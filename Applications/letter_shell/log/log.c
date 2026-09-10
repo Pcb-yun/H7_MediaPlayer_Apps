@@ -304,16 +304,16 @@ void logWrite(Log *log, LogLevel level, const char *fmt, ...)
 // hexdump, logHexDump, hex dump\r\n hexdump [log] [level] [base] [len]);
 // #endif /** SHELL_USING_COMPANION == 1 */
 
-#if SHELL_USING_COMPANION == 1
-void logSwitchLevel(Shell *shell)
-{
-    Log *log = shellCompanionGet(shell, SHELL_COMPANION_ID_LOG);
-    SHELL_ASSERT(log, return);
-    log->level = (LogLevel)(log->level >= LOG_ALL ? LOG_NONE : (log->level + 1));
-    logPrintln("set log level: %d", log->level);
-}
-SHELL_EXPORT_KEY(SHELL_CMD_PERMISSION(0), 0x04000000, logSwitchLevel, switch log level);
-#endif /** SHELL_USING_COMPANION == 1 */
+// #if SHELL_USING_COMPANION == 1
+// void logSwitchLevel(Shell *shell)
+// {
+//     Log *log = shellCompanionGet(shell, SHELL_COMPANION_ID_LOG);
+//     SHELL_ASSERT(log, return);
+//     log->level = (LogLevel)(log->level >= LOG_ALL ? LOG_NONE : (log->level + 1));
+//     logPrintln("set log level: %d", log->level);
+// }
+// SHELL_EXPORT_KEY(SHELL_CMD_PERMISSION(0), 0x04000000, logSwitchLevel, switch log level);
+// #endif /** SHELL_USING_COMPANION == 1 */
 
 /**
  * @brief 初始化日志系统

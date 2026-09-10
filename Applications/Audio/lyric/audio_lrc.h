@@ -1,10 +1,7 @@
 /**
  * @file audio_lrc.h
  * @author Pcb-yun (pcbyinyun@163.com)
- * @brief 歌词(lrc)解析组件头文件
- *        职责: 读取/解析.lrc文件并对外提供"当前时间对应的歌词行",
- *        供 ui/audio_tui.c 渲染歌词区。解析功能尚未实现, 暂为空壳。
- * @note  界面组件(ui)只负责渲染, 不直接接触lrc文件内容
+ * @brief 歌词组件头文件
  */
 
 #ifndef __AUDIO_LRC_H__
@@ -17,7 +14,34 @@
 extern "C" {
 #endif /* __cplusplus */
 
-/* 预留: 歌词行数据结构与解析接口将在实现时补充于此 */
+/**
+ * @brief 歌词数据存储
+ */
+typedef struct {
+    uint8_t *lrc_data;  // 歌词数据缓冲区指针
+    uint32_t curent_ptr; // 当前读指针
+    uint32_t size;      // 歌词数据大小
+} lrcdata_t;
+
+/**
+ * @brief 行歌词
+ */
+typedef struct {
+    audio_time_t time;  // 开始时间
+    uint8_t *raw;       // 原词(以\0终止)
+    uint8_t *tras;      // 翻译(以\0终止, 无翻译时为NULL)
+} lrc_t;
+
+
+void Lrc_register(uint8_t *data, uint32_t size);
+const lrc_t *Lrc_getlen(audio_time_t time);
+void Lrc_free(void);
+
+
+
+
+
+
 
 #ifdef __cplusplus
 }

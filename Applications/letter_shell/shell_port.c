@@ -27,7 +27,8 @@ char shellBuffer[SHELL_BUFFER_SIZE] __attribute__((section(".DTCM")));
  * @param len 数据长度
  * @return 实际写入的数据长度
  */
-static short userShellWrite(char *data, uint32_t len) {
+static __attribute__((section(".ITCM")))
+short userShellWrite(char *data, uint32_t len) {
     USART1_Transmit_DMA((uint8_t *)data, len);
     return len;
 }
@@ -38,7 +39,8 @@ static short userShellWrite(char *data, uint32_t len) {
 * @param len 数据长度
 * @return 实际读取的数据长度
 */
-static short userShellRead(char *data, unsigned short len) {
+static __attribute__((section(".ITCM")))
+short userShellRead(char *data, unsigned short len) {
     return (short)usart1_rx_stream_read((uint8_t *)data, len);
 }
 

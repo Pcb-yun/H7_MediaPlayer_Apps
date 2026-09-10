@@ -23,8 +23,9 @@
 struct XYM_Port_t {
 	Shell *shell;
 	xym_session_t session;
-	uint8_t *buffer;		// 收发缓冲
-	uint32_t buffer_size;	// 缓冲大小
+	uint8_t *packet_buf;	// 协议包缓冲
+	uint8_t *file_cache;	// 文件收发缓冲
+	uint32_t cache_size;	// 文件收发缓冲大小
 };
 static struct XYM_Port_t *port = NULL;
 
@@ -88,16 +89,50 @@ static void xym_file_remove(const char *path) {
 }
 
 /**
- * @brief  将累积缓冲中的数据一次性写入文件
+ * @brief  将一个通过协议校验的数据包完整写入文件
  * @param  fp  文件句柄
- * @param  buf 累积缓冲
+ * @param  buf 已通过 CRC 校验的数据包
  * @param  cnt 待写入字节数
  * @retval FR_OK 成功，否则失败
  */
-static FRESULT xym_buf_flush(FIL *fp, const uint8_t *buf, uint32_t cnt) {
+static FRESULT xym_file_write(FIL *fp, const uint8_t *buf, uint32_t cnt) {
 	UINT bw = 0;
 	if (cnt == 0) return FR_OK;
 	if (f_write(fp, buf, cnt, &bw) != FR_OK || bw != cnt) return FR_INT_ERR;
+	return FR_OK;
+}
+
+/**
+ * @brief  将文件缓存中的有效数据写入文件
+ * @param  fp     文件句柄
+ * @param  filled 文件缓存当前有效字节数，刷新成功后清零
+ * @retval FR_OK  刷新成功
+ * @retval 其它    FatFs 写入失败
+ */
+static FRESULT xym_file_cache_flush(FIL *fp, uint32_t *filled) {
+	FRESULT res = xym_file_write(fp, port->file_cache, *filled);
+	if (res == FR_OK) *filled = 0;
+	return res;
+}
+
+/**
+ * @brief  将协议数据包追加到文件缓存
+ * @note   剩余空间不足时先刷新已有数据，再复制当前数据包。
+ *         调用方需保证单包长度不超过文件缓存容量。
+ * @param  fp     文件句柄
+ * @param  data   已通过协议校验的数据包
+ * @param  cnt    数据包有效字节数
+ * @param  filled 文件缓存当前有效字节数，追加成功后同步更新
+ * @retval FR_OK  追加成功
+ * @retval 其它    缓存刷新或文件写入失败
+ */
+static FRESULT xym_file_cache_append(FIL *fp, const uint8_t *data, uint32_t cnt, uint32_t *filled) {
+	if (cnt == 0) return FR_OK;
+	if (*filled + cnt > port->cache_size) {
+		if (xym_file_cache_flush(fp, filled) != FR_OK) return FR_INT_ERR;
+	}
+	memcpy(&port->file_cache[*filled], data, cnt);
+	*filled += cnt;
 	return FR_OK;
 }
 
@@ -114,22 +149,32 @@ static xym_sta_t xym_port_init(void) {
 	port->shell = shellGetCurrent();
 	SHELL_ASSERT(port->shell, return XYM_ERROR_HW);
 
-	// 按空闲堆动态分配收发缓冲(512整数倍), 为系统保留XYMODEM_RESERVED_MEM
-	size_t free = xPortGetFreeHeapSize();
-	if (free <= XYMODEM_RESERVED_MEM) {
-		logPrintln("no enough memory for xymodem buffer");
+	/* 从最大连续空闲块扣除保留内存，并按 1024 字节向下对齐。 */
+	HeapStats_t heap_stats;
+	vPortGetHeapStats(&heap_stats);
+	size_t alloc_size = 0;
+	if (heap_stats.xSizeOfLargestFreeBlockInBytes > XYMODEM_RESERVED_MEM) {
+		alloc_size = (heap_stats.xSizeOfLargestFreeBlockInBytes - XYMODEM_RESERVED_MEM) /
+			XYM_PKT_SIZE_1024 * XYM_PKT_SIZE_1024;
+	}
+	/* 至少需要 1 KB 协议包缓冲和 1 KB 文件缓存。 */
+	if (alloc_size < XYM_PKT_SIZE_1024 * 2u) {
+		logPrintln("no enough memory for xymodem file cache");
 		vPortFree(port);
 		port = NULL;
 		return XYM_ERROR_HW;
 	}
-	port->buffer_size = (uint32_t)((free - XYMODEM_RESERVED_MEM) / 512u * 512u);
-	port->buffer = pvPortMalloc(port->buffer_size);
-	if (port->buffer == NULL) {
-		logPrintln("buffer alloc failed");
+
+	/* 一次分配后切成两个互不重叠的逻辑缓冲，避免堆碎片。 */
+	port->packet_buf = pvPortMalloc(alloc_size);
+	if (port->packet_buf == NULL) {
+		logPrintln("xymodem buffer alloc failed");
 		vPortFree(port);
 		port = NULL;
 		return XYM_ERROR_HW;
 	}
+	port->file_cache = &port->packet_buf[XYM_PKT_SIZE_1024];
+	port->cache_size = (uint32_t)(alloc_size - XYM_PKT_SIZE_1024);
 
 	static const struct xym_ops ops = {
 		.send = xymodem_port_send_data,
@@ -150,7 +195,8 @@ static xym_sta_t xym_port_init(void) {
  */
 static void xym_port_deinit(void) {
 	if (port) {
-		vPortFree(port->buffer);
+		/* file_cache 是 packet_buf 所指连续内存中的偏移地址，不单独释放。 */
+		vPortFree(port->packet_buf);
 		vPortFree(port);
 		port = NULL;
 	}
@@ -189,21 +235,30 @@ static void shell_sx(int argc, char *argv[]) {
 	xym_sta_t sta = XYM_OK;
 	uint16_t len = 0;
 	uint32_t sent = 0;
+	uint32_t cached = 0;
+	uint32_t offset = 0;
 	UINT br = 0;
 
-	while (1) {
-		if (sent < fsize) {
-			len = ((fsize - sent) > XYM_PKT_SIZE_1024) ? XYM_PKT_SIZE_1024 : (uint16_t)(fsize - sent);
-			if (f_read(fp, port->buffer, len, &br) != FR_OK) { sta = XYM_ERROR_HW; break; }
-			len = (uint16_t)br;
-			sta = xmodem_transmit(&port->session, port->buffer, len);
-			if (sta != XYM_OK) break;
-			sent += len;
-		} else {
-			sta = xmodem_transmit(&port->session, port->buffer, 0);
+	while (sent < fsize) {
+		uint32_t request = fsize - sent;
+		if (request > port->cache_size) request = port->cache_size;
+		if (f_read(fp, port->file_cache, request, &br) != FR_OK || br == 0) {
+			sta = XYM_ERROR_HW;
 			break;
 		}
+		cached = br;
+		offset = 0;
+		while (offset < cached) {
+			uint32_t remain = cached - offset;
+			len = (remain > XYM_PKT_SIZE_1024) ? XYM_PKT_SIZE_1024 : (uint16_t)remain;
+			sta = xmodem_transmit(&port->session, &port->file_cache[offset], len);
+			if (sta != XYM_OK) break;
+			offset += len;
+			sent += len;
+		}
+		if (sta != XYM_OK) break;
 	}
+	if (sta == XYM_OK) sta = xmodem_transmit(&port->session, port->packet_buf, 0);
 
 	F_close(&fp);
 	xym_port_deinit();
@@ -231,8 +286,7 @@ static void shell_rx(int argc, char *argv[]) {
 	FIL *fp = NULL;
 	xym_sta_t sta = XYM_OK;
 	uint16_t len = 0;
-	uint32_t received = 0;
-	uint32_t filled = 0;         /* 累积缓冲中待写入文件的字节数 */
+	uint32_t filled = 0;
 
 	if (F_open(&fp, (const uint8_t *)argv[1], FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) {
 		logPrintln("Fail to create %s", argv[1]);
@@ -242,28 +296,20 @@ static void shell_rx(int argc, char *argv[]) {
 	}
 
 	while (1) {
-		sta = xmodem_receive(&port->session, port->buffer, &len);
+		sta = xmodem_receive(&port->session, port->packet_buf, &len);
 		if (sta == XYM_OK) {
-			/* 数据包累积到缓冲，写满则一次性写入文件 */
-			received += len;
-			if (filled > 0 && filled + len > port->buffer_size) {
-				if (xym_buf_flush(fp, port->buffer, filled) != FR_OK) {
-					xymodem_active_cancel(&port->session);
-					sta = XYM_ERROR_HW;
-					break;
-				}
-				filled = 0;
+			if (xym_file_cache_append(fp, port->packet_buf, len, &filled) != FR_OK) {
+				xymodem_active_cancel(&port->session);
+				sta = XYM_ERROR_HW;
+				break;
 			}
-			memmove(&port->buffer[filled], port->buffer, len);
-			filled += len;
 			continue;
 		}
 		break; /* XYM_END 正常结束 / 其它错误 */
 	}
 
-	/* 收尾：写入残留数据并关闭文件 */
-	if (xym_buf_flush(fp, port->buffer, filled) != FR_OK) sta = XYM_ERROR_HW;
-	F_close(&fp);
+	if (sta == XYM_END && xym_file_cache_flush(fp, &filled) != FR_OK) sta = XYM_ERROR_HW;
+	if (F_close(&fp) != FR_OK) sta = XYM_ERROR_HW;
 	xym_port_deinit();
 	osEventFlagsClear(System_StatusHandle, APP_NEED_USART);
 
@@ -297,6 +343,8 @@ static void shell_sb(int argc, char *argv[]) {
 	uint16_t len = 0;
 	uint32_t sent = 0;
 	uint32_t total_sent = 0;
+	uint32_t cached = 0;
+	uint32_t offset = 0;
 	UINT br = 0;
 	int fi = 0;
 	bool all_ok = true;
@@ -319,26 +367,36 @@ static void shell_sb(int argc, char *argv[]) {
 		}
 
 		/* 首包：文件信息包（文件名 + 文件大小） */
-		memset(port->buffer, 0, XYM_PKT_SIZE_128);
-		xym_file_encode(port->buffer, xym_file_basename(argv[fi]), fsize);
-		sta = ymodem_transmit(&port->session, port->buffer, XYM_PKT_SIZE_128);
+		memset(port->packet_buf, 0, XYM_PKT_SIZE_128);
+		xym_file_encode(port->packet_buf, xym_file_basename(argv[fi]), fsize);
+		sta = ymodem_transmit(&port->session, port->packet_buf, XYM_PKT_SIZE_128);
 		if (sta != XYM_OK) { F_close(&fp); break; }
 
 		sent = 0;
 		while (sent < fsize) {
-			/* 读文件数据并发送 */
-			len = ((fsize - sent) > XYM_PKT_SIZE_1024) ? XYM_PKT_SIZE_1024 : (uint16_t)(fsize - sent);
-			if (f_read(fp, port->buffer, len, &br) != FR_OK) { sta = XYM_ERROR_HW; break; }
-			len = (uint16_t)br;
-			sta = ymodem_transmit(&port->session, port->buffer, len);
+			uint32_t request = fsize - sent;
+			if (request > port->cache_size) request = port->cache_size;
+			if (f_read(fp, port->file_cache, request, &br) != FR_OK || br == 0) {
+				sta = XYM_ERROR_HW;
+				break;
+			}
+			cached = br;
+			offset = 0;
+			while (offset < cached) {
+				uint32_t remain = cached - offset;
+				len = (remain > XYM_PKT_SIZE_1024) ? XYM_PKT_SIZE_1024 : (uint16_t)remain;
+				sta = ymodem_transmit(&port->session, &port->file_cache[offset], len);
+				if (sta != XYM_OK) break;
+				offset += len;
+				sent += len;
+			}
 			if (sta != XYM_OK) break;
-			sent += len;
 		}
 		F_close(&fp);
 		if (sta != XYM_OK) break;
 
 		/* 数据发完：EOT 结束当前文件 */
-		sta = ymodem_transmit(&port->session, port->buffer, 0);
+		sta = ymodem_transmit(&port->session, port->packet_buf, 0);
 		total_sent += sent;
 		/* sta 为 XYM_FIL_SET（接收端期待下一个文件）或 XYM_END（会话结束）或错误 */
 		if (sta != XYM_FIL_SET) break;
@@ -346,8 +404,8 @@ static void shell_sb(int argc, char *argv[]) {
 
 	/* 所有文件发完：若接收端仍期待下一个文件，发空文件信息包结束整个会话 */
 	if (sta == XYM_FIL_SET) {
-		memset(port->buffer, 0, XYM_PKT_SIZE_128);
-		sta = ymodem_transmit(&port->session, port->buffer, 0);
+		memset(port->packet_buf, 0, XYM_PKT_SIZE_128);
+		sta = ymodem_transmit(&port->session, port->packet_buf, 0);
 	}
 
 	xym_port_deinit();
@@ -362,6 +420,8 @@ sb, shell_sb, Send Ymodem);
  * @brief  Y协议接收
  */
 static void shell_rb(int argc, char *argv[]) {
+	(void)argc;
+	(void)argv;
 	osEventFlagsSet(System_StatusHandle, APP_NEED_USART);
 	if (xym_port_init() != XYM_OK) {
 		logPrintln("X/Y modem port init failed");
@@ -375,26 +435,33 @@ static void shell_rb(int argc, char *argv[]) {
 	uint16_t len = 0;
 	uint32_t received = 0;
 	uint32_t fsize = 0;
-	uint32_t filled = 0;         /* 累积缓冲中待写入文件的字节数 */
+	uint32_t filled = 0;
 	char fname[XYM_PKT_SIZE_128];
 	char last_name[XYM_PKT_SIZE_128] = {0}; /* 记录当前打开的文件名，用于失败清理 */
 
 	while (1) {
-		sta = ymodem_receive(&port->session, port->buffer, &len);
+		sta = ymodem_receive(&port->session, port->packet_buf, &len);
 		if (sta == XYM_FIL_GET) {
 			/* 新文件开始（Ymodem 支持多文件，逐文件保存） */
 			if (fp) {
-				if (xym_buf_flush(fp, port->buffer, filled) != FR_OK) {
+				if (received != fsize) {
+					xymodem_active_cancel(&port->session);
+					sta = XYM_ERROR_INVALID_DATA;
+					break;
+				}
+				if (xym_file_cache_flush(fp, &filled) != FR_OK) {
 					xymodem_active_cancel(&port->session);
 					sta = XYM_ERROR_HW;
 					break;
 				}
-				filled = 0;
-				F_close(&fp);
+				if (F_close(&fp) != FR_OK) {
+					xymodem_active_cancel(&port->session);
+					sta = XYM_ERROR_HW;
+					break;
+				}
 				fp = NULL;
 			}
-			xym_file_decode(port->buffer, fname, &fsize);
-			if (argc >= 2) snprintf(fname, sizeof(fname), "%s", argv[1]); /* 用户指定保存文件名 */
+			xym_file_decode(port->packet_buf, fname, &fsize);
 			if (F_open(&fp, (const uint8_t *)fname, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) {
 				logPrintln("Fail to create %s", fname);
 				xymodem_active_cancel(&port->session);
@@ -406,29 +473,32 @@ static void shell_rb(int argc, char *argv[]) {
 			continue;
 		}
 		if (sta == XYM_OK) {
-			/* 数据包累积到缓冲，写满则一次性写入文件 */
-			received += len;
-			if (filled > 0 && filled + len > port->buffer_size) {
-				if (fp && xym_buf_flush(fp, port->buffer, filled) != FR_OK) {
+			/* Ymodem 末包会被填充到 128/1024 字节，只保存文件声明的实际长度。 */
+			if (fp) {
+				uint32_t remain = (received < fsize) ? (fsize - received) : 0;
+				if (remain == 0) {
+					xymodem_active_cancel(&port->session);
+					sta = XYM_ERROR_INVALID_DATA;
+					break;
+				}
+				uint32_t valid_len = (len < remain) ? len : remain;
+				if (xym_file_cache_append(fp, port->packet_buf, valid_len, &filled) != FR_OK) {
 					xymodem_active_cancel(&port->session);
 					sta = XYM_ERROR_HW;
 					break;
 				}
-				filled = 0;
-			}
-			if (fp) {
-				memmove(&port->buffer[filled], port->buffer, len);
-				filled += len;
+				received += valid_len;
 			}
 			continue;
 		}
 		break; /* XYM_END 正常结束 / 其它错误或取消 */
 	}
 
-	/* 收尾：写入残留数据并关闭文件 */
+	/* 正常结束时，实际写入长度必须与 Ymodem 文件信息包完全一致。 */
+	if (sta == XYM_END && fp && received != fsize) sta = XYM_ERROR_INVALID_DATA;
+	if (sta == XYM_END && fp && xym_file_cache_flush(fp, &filled) != FR_OK) sta = XYM_ERROR_HW;
 	if (fp) {
-		if (xym_buf_flush(fp, port->buffer, filled) != FR_OK) sta = XYM_ERROR_HW;
-		F_close(&fp);
+		if (F_close(&fp) != FR_OK) sta = XYM_ERROR_HW;
 	}
 	xym_port_deinit();
 	osEventFlagsClear(System_StatusHandle, APP_NEED_USART);

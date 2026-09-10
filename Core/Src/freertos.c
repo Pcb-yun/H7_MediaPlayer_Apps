@@ -32,7 +32,6 @@
 #include "shell.h"
 #include "sdmmc.h"
 #include "fatfs.h"
-#include "boot.h"
 
 /* USER CODE END Includes */
 
@@ -73,7 +72,7 @@ const osThreadAttr_t Shell_attributes = {
 osThreadId_t Online_CheckHandle;
 const osThreadAttr_t Online_Check_attributes = {
   .name = "Online_Check",
-  .stack_size = 128 * 4,
+  .stack_size = 87 * 4,
   .priority = (osPriority_t) osPriorityLow3,
 };
 /* Definitions for System_Status */
@@ -179,23 +178,23 @@ void vApplicationMallocFailedHook(void)
    to query the size of free heap space that remains (although it does not
    provide information on how the remaining heap might be fragmented). */
 
-  taskDISABLE_INTERRUPTS();
-  my_printf("\r\n[ERROR] Memory allocation failed!\r\n");
-
-  // 获取当前任务信息
-  TaskHandle_t xCurrentTask = xTaskGetCurrentTaskHandle();
-  if(xCurrentTask != NULL) {
-    const char *pcTaskName = pcTaskGetName(xCurrentTask);
-    my_printf("Current task: %s\r\n", pcTaskName);
-  }
-
-  // 打印空闲堆信息
-  size_t xFreeHeapSize = xPortGetFreeHeapSize();
-  size_t xMinimumEverFreeHeapSize = xPortGetMinimumEverFreeHeapSize();
-  my_printf("Free heap size: %u bytes\r\n", xFreeHeapSize);
-  my_printf("Min ever free heap: %u bytes\r\n", xMinimumEverFreeHeapSize);
-
-  Error_Handler();
+//   taskDISABLE_INTERRUPTS();
+//   my_printf("\r\n[ERROR] Memory allocation failed!\r\n");
+//
+//   // 获取当前任务信息
+//   TaskHandle_t xCurrentTask = xTaskGetCurrentTaskHandle();
+//   if(xCurrentTask != NULL) {
+//     const char *pcTaskName = pcTaskGetName(xCurrentTask);
+//     my_printf("Current task: %s\r\n", pcTaskName);
+//   }
+//
+//   // 打印空闲堆信息
+//   size_t xFreeHeapSize = xPortGetFreeHeapSize();
+//   size_t xMinimumEverFreeHeapSize = xPortGetMinimumEverFreeHeapSize();
+//   my_printf("Free heap size: %u bytes\r\n", xFreeHeapSize);
+//   my_printf("Min ever free heap: %u bytes\r\n", xMinimumEverFreeHeapSize);
+//
+//   Error_Handler();
 }
 /* USER CODE END 5 */
 
@@ -271,17 +270,7 @@ void Sys_Init_Task(void *argument)
 
   SHOW_DMESG(dmesg_wait, "Initialize BootShared");
   extern void BootShared_Init(void);
-  void BootShared_Init();
-  SHOW_DMESG(dmesg_ok, NULL);
-
-  SHOW_DMESG(dmesg_wait, "Initialize Shell");
-  extern void userShellInit(void);
-  userShellInit();
-  SHOW_DMESG(dmesg_ok, NULL);
-
-  SHOW_DMESG(dmesg_wait, "Initialize shell log");
-  extern void logInit(void);
-  logInit();
+  BootShared_Init();
   SHOW_DMESG(dmesg_ok, NULL);
 
   SHOW_DMESG(dmesg_wait, "Initialize SDMMC1");
@@ -308,10 +297,20 @@ void Sys_Init_Task(void *argument)
   MX_SAI1_Init();
   Show_dmesg(dmesg_ok, NULL);
 
-  Show_dmesg(dmesg_wait, "Initialize OCTOSPI1");
-  extern void MX_OCTOSPI1_Init(void);
-  MX_OCTOSPI1_Init();
-  Show_dmesg(dmesg_ok, NULL);
+  // Show_dmesg(dmesg_wait, "Initialize W25Q64");
+  // extern bool W25Q64_Init(void);
+  // W25Q64_Init();
+  // Show_dmesg(dmesg_ok, NULL);
+
+  SHOW_DMESG(dmesg_wait, "Initialize Shell");
+  extern void userShellInit(void);
+  userShellInit();
+  SHOW_DMESG(dmesg_ok, NULL);
+
+  SHOW_DMESG(dmesg_wait, "Initialize shell log");
+  extern void logInit(void);
+  logInit();
+  SHOW_DMESG(dmesg_ok, NULL);
 
   extern Shell shell;
   Shell_New_Convo(&shell);

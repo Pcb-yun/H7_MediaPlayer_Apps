@@ -335,21 +335,7 @@ static void OS_Update(uint8_t *path) {
  * @brief 重启系统
  */
 static void OS_Reboot(void) {
-    osEventFlagsSet(System_StatusHandle, APP_NEED_USART);
-    logPrintln("WARNING: System will be reboot, Would you like to proceed? (y/n)");
-
-    uint8_t byte;
-    while (1) {
-        if (shell.read((char*)&byte, 1)) {
-            if (byte == 'y') {
-                HAL_NVIC_SystemReset();
-            } else {
-                osEventFlagsClear(System_StatusHandle, APP_NEED_USART);
-                break;
-            }
-        }
-        osDelay(20);
-    }
+    HAL_NVIC_SystemReset();
 }
 
 /**

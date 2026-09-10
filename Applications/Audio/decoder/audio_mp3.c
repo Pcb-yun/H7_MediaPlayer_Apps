@@ -19,6 +19,8 @@
 typedef struct {
 	FIL* file;  // 文件句柄
 	drmp3 mp3;  // dr_mp3解码器实例
+	FRESULT io_res; // 最近一次文件I/O结果
+	bool alloc_failed; // 解码库内部分配失败
 } mp3_ctx_t;
 
 /**
@@ -28,8 +30,10 @@ typedef struct {
  * @return 分配的内存指针
  */
 static void* mp3_malloc(size_t sz, void* pUserData) {
-	(void)pUserData;
-	return pvPortMalloc(sz);
+	mp3_ctx_t *ctx = (mp3_ctx_t*)pUserData;
+	void *p = pvPortMalloc(sz);
+	if (p == NULL && ctx != NULL) ctx->alloc_failed = true;
+	return p;
 }
 
 /**
@@ -49,16 +53,17 @@ static const drmp3_allocation_callbacks mp3_alloc = {
 
 /**
  * @brief FATFS文件读回调
- * @param pUserData FIL*文件句柄
+ * @param pUserData mp3_ctx_t* 上下文
  * @param pBufferOut 输出缓冲
  * @param bytesToRead 请求读取的字节数
  * @return 实际读取的字节数
  */
 static size_t fs_read(void* pUserData, void* pBufferOut, size_t bytesToRead) {
-	FIL* pFile = (FIL*)pUserData;
+	mp3_ctx_t *ctx = (mp3_ctx_t*)pUserData;
 	UINT br = 0;
 
-	if (f_read(pFile, pBufferOut, (UINT)bytesToRead, &br) != FR_OK) {
+	ctx->io_res = f_read(ctx->file, pBufferOut, (UINT)bytesToRead, &br);
+	if (ctx->io_res != FR_OK) {
 		return 0;
 	}
 	return (size_t)br;
@@ -66,13 +71,14 @@ static size_t fs_read(void* pUserData, void* pBufferOut, size_t bytesToRead) {
 
 /**
  * @brief FATFS文件定位回调
- * @param pUserData FIL*文件句柄
+ * @param pUserData mp3_ctx_t* 上下文
  * @param offset 相对origin的偏移量
  * @param origin 定位基准
  * @retval enum drmp3_bool32
  */
 static drmp3_bool32 fs_seek(void* pUserData, int offset, drmp3_seek_origin origin) {
-	FIL* pFile = (FIL*)pUserData;
+	mp3_ctx_t *ctx = (mp3_ctx_t*)pUserData;
+	FIL *pFile = ctx->file;
 	FSIZE_t pos = 0;
 
 	switch (origin) {
@@ -82,46 +88,60 @@ static drmp3_bool32 fs_seek(void* pUserData, int offset, drmp3_seek_origin origi
 		default: return DRMP3_FALSE;
 	}
 
-	return (f_lseek(pFile, pos) == FR_OK) ? DRMP3_TRUE : DRMP3_FALSE;
+	ctx->io_res = f_lseek(pFile, pos);
+	return (ctx->io_res == FR_OK) ? DRMP3_TRUE : DRMP3_FALSE;
 }
 
 /**
  * @brief FATFS文件当前位置回调
- * @param pUserData FIL*文件句柄
+ * @param pUserData mp3_ctx_t* 上下文
  * @param pCursor 当前位置输出
  * @return 成功返回DRMP3_TRUE
  */
 static drmp3_bool32 mp3_on_tell(void* pUserData, drmp3_int64* pCursor) {
-	FIL* pFile = (FIL*)pUserData;
+	mp3_ctx_t *ctx = (mp3_ctx_t*)pUserData;
 
-	*pCursor = (drmp3_int64)f_tell(pFile);
+	*pCursor = (drmp3_int64)f_tell(ctx->file);
 	return DRMP3_TRUE;
 }
 
 /**
- * @brief 打开mp3文件
+ * @brief 打开mp3文件(仅播放, 不解析元数据)
  * @param path 文件路径
- * @return 解码器句柄，失败返回NULL
+ * @param onMeta 元数据回调(未使用, 保留以匹配解码器接口)
+ * @param meta_user 回调用户数据(未使用)
+ * @return 解码器句柄, 失败返回NULL
  */
-static void* mp3_open(const uint8_t* path) {
-	if (path == NULL) return NULL;
+static audio_res_t mp3_open(const uint8_t* path, audio_meta_proc_t onMeta,
+	void *meta_user, void **dec) {
+	drmp3_allocation_callbacks alloc = mp3_alloc;
+	(void)onMeta; (void)meta_user;   // MP3仅播放, 暂不解析元数据
+
+	if (path == NULL || dec == NULL) return AUDIO_RES_INVALID_ARG;
+	*dec = NULL;
 
 	mp3_ctx_t *ctx = pvPortMalloc(sizeof(mp3_ctx_t));
-	if (ctx == NULL) return NULL;
+	if (ctx == NULL) return AUDIO_RES_NO_MEMORY;
 	memset(ctx, 0, sizeof(mp3_ctx_t));
+	alloc.pUserData = ctx;
 
-	if (F_open(&ctx->file, path, FA_READ) != FR_OK) {
+	ctx->io_res = F_open(&ctx->file, path, FA_READ);
+	if (ctx->io_res != FR_OK) {
 		vPortFree(ctx);
-		return NULL;
+		return AUDIO_RES_FS_OPEN_FAILED;
 	}
 
-	if (!drmp3_init(&ctx->mp3, fs_read, fs_seek, mp3_on_tell, NULL, ctx->file, &mp3_alloc)) {
+	if (!drmp3_init(&ctx->mp3, fs_read, fs_seek, mp3_on_tell, NULL, ctx, &alloc)) {
+		audio_res_t res = ctx->alloc_failed ? AUDIO_RES_NO_MEMORY :
+			((ctx->io_res == FR_OK) ? AUDIO_RES_DECODER_OPEN_FAILED :
+			AUDIO_RES_FS_READ_FAILED);
 		F_close(&ctx->file);
 		vPortFree(ctx);
-		return NULL;
+		return res;
 	}
 
-	return ctx;
+	*dec = ctx;
+	return AUDIO_RES_OK;
 }
 
 /**
@@ -131,32 +151,46 @@ static void* mp3_open(const uint8_t* path) {
  * @param frames 请求读取的帧数
  * @return 实际读取的帧数
  */
-static uint32_t mp3_read(void* dec, float* buf, uint32_t frames) {
+static audio_res_t mp3_read(void* dec, int16_t* buf, uint32_t frames,
+	uint32_t *frames_read) {
 	mp3_ctx_t* ctx = (mp3_ctx_t*)dec;
-	return (uint32_t)drmp3_read_pcm_frames_f32(&ctx->mp3, frames, buf);
+	if (ctx == NULL || buf == NULL || frames_read == NULL || frames == 0) {
+		return AUDIO_RES_INVALID_ARG;
+	}
+	ctx->io_res = FR_OK;
+	*frames_read = (uint32_t)drmp3_read_pcm_frames_s16(&ctx->mp3, frames, buf);
+	if (ctx->io_res != FR_OK) return AUDIO_RES_FS_READ_FAILED;
+	return (*frames_read == 0) ? AUDIO_RES_EOF : AUDIO_RES_OK;
 }
 
 /**
  * @brief 跳转到指定PCM帧
  * @param dec 解码器句柄
  * @param frame 目标帧索引
- * @return 成功返回true，失败返回false
+ * @return 统一操作结果
  */
-static bool mp3_seek(void* dec, uint32_t frame) {
+static audio_res_t mp3_seek(void* dec, uint32_t frame) {
 	mp3_ctx_t* ctx = (mp3_ctx_t*)dec;
-	return drmp3_seek_to_pcm_frame(&ctx->mp3, frame) == DRMP3_TRUE;
+	if (ctx == NULL) return AUDIO_RES_INVALID_ARG;
+	ctx->io_res = FR_OK;
+	if (drmp3_seek_to_pcm_frame(&ctx->mp3, frame) == DRMP3_TRUE) return AUDIO_RES_OK;
+	return (ctx->io_res == FR_OK) ? AUDIO_RES_DECODER_SEEK_FAILED :
+		AUDIO_RES_FS_SEEK_FAILED;
 }
 
 /**
  * @brief 关闭解码器并释放资源
  * @param dec 解码器句柄
  */
-static void mp3_close(void* dec) {
+static audio_res_t mp3_close(void* dec) {
 	mp3_ctx_t* ctx = (mp3_ctx_t*)dec;
+	FRESULT res;
+	if (ctx == NULL) return AUDIO_RES_INVALID_ARG;
 
 	drmp3_uninit(&ctx->mp3);
-	F_close(&ctx->file);
+	res = F_close(&ctx->file);
 	vPortFree(ctx);
+	return (res == FR_OK) ? AUDIO_RES_OK : AUDIO_RES_FS_CLOSE_FAILED;
 }
 
 /**
@@ -164,8 +198,9 @@ static void mp3_close(void* dec) {
  * @param dec 解码器句柄
  * @param info 音频元数据输出
  */
-static void mp3_get_meta(void* dec, audio_meta_t* info) {
+static audio_res_t mp3_get_meta(void* dec, audio_meta_t* info) {
 	mp3_ctx_t* ctx = (mp3_ctx_t*)dec;
+	if (ctx == NULL || info == NULL) return AUDIO_RES_INVALID_ARG;
 
 	info->sample_rate = ctx->mp3.sampleRate;
 	info->channels = ctx->mp3.channels;
@@ -174,6 +209,7 @@ static void mp3_get_meta(void* dec, audio_meta_t* info) {
 		0 : (uint64_t)ctx->mp3.totalPCMFrameCount;
 	info->duration_ms = (info->sample_rate > 0) ?
 		(uint32_t)(info->total_frames * 1000 / info->sample_rate) : 0;
+	return AUDIO_RES_OK;
 }
 
 /* mp3解码器接口 */

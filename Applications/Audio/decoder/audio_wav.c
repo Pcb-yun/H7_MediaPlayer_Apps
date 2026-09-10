@@ -19,6 +19,8 @@
 typedef struct {
 	FIL* file;  // 文件句柄
 	drwav wav;  // dr_wav解码器实例
+	FRESULT io_res; // 最近一次文件I/O结果
+	bool alloc_failed; // 解码库内部分配失败
 } wav_ctx_t;
 
 /**
@@ -28,8 +30,10 @@ typedef struct {
  * @return 分配的内存指针
  */
 static void* wav_malloc(size_t sz, void* pUserData) {
-	(void)pUserData;
-	return pvPortMalloc(sz);
+	wav_ctx_t *ctx = (wav_ctx_t*)pUserData;
+	void *p = pvPortMalloc(sz);
+	if (p == NULL && ctx != NULL) ctx->alloc_failed = true;
+	return p;
 }
 
 /**
@@ -55,10 +59,11 @@ static const drwav_allocation_callbacks wav_alloc = {
  * @return 实际读取的字节数
  */
 static size_t fs_read(void* pUserData, void* pBufferOut, size_t bytesToRead) {
-	FIL* pFile = (FIL*)pUserData;
+	wav_ctx_t *ctx = (wav_ctx_t*)pUserData;
 	UINT br = 0;
 
-	if (f_read(pFile, pBufferOut, (UINT)bytesToRead, &br) != FR_OK) {
+	ctx->io_res = f_read(ctx->file, pBufferOut, (UINT)bytesToRead, &br);
+	if (ctx->io_res != FR_OK) {
 		return 0;
 	}
 	return (size_t)br;
@@ -72,7 +77,8 @@ static size_t fs_read(void* pUserData, void* pBufferOut, size_t bytesToRead) {
  * @retval enum drwav_bool32
  */
 static drwav_bool32 fs_seek(void* pUserData, int offset, drwav_seek_origin origin) {
-	FIL* pFile = (FIL*)pUserData;
+	wav_ctx_t *ctx = (wav_ctx_t*)pUserData;
+	FIL* pFile = ctx->file;
 	FSIZE_t pos = 0;
 
 	switch (origin) {
@@ -82,7 +88,8 @@ static drwav_bool32 fs_seek(void* pUserData, int offset, drwav_seek_origin origi
 		default: return DRWAV_FALSE;
 	}
 
-	return (f_lseek(pFile, pos) == FR_OK) ? DRWAV_TRUE : DRWAV_FALSE;
+	ctx->io_res = f_lseek(pFile, pos);
+	return (ctx->io_res == FR_OK) ? DRWAV_TRUE : DRWAV_FALSE;
 }
 
 /**
@@ -92,36 +99,49 @@ static drwav_bool32 fs_seek(void* pUserData, int offset, drwav_seek_origin origi
  * @return 成功返回DRWAV_TRUE
  */
 static drwav_bool32 wav_on_tell(void* pUserData, drwav_int64* pCursor) {
-	FIL* pFile = (FIL*)pUserData;
+	wav_ctx_t *ctx = (wav_ctx_t*)pUserData;
 
-	*pCursor = (drwav_int64)f_tell(pFile);
+	*pCursor = (drwav_int64)f_tell(ctx->file);
 	return DRWAV_TRUE;
 }
 
 /**
  * @brief 打开wav文件
  * @param path 文件路径
+ * @param onMeta 元数据回调(暂不支持)
+ * @param meta_user 回调用户数据
  * @return 解码器句柄，失败返回NULL
  */
-static void* wav_open(const uint8_t* path) {
-	if (path == NULL) return NULL;
+static audio_res_t wav_open(const uint8_t* path, audio_meta_proc_t onMeta,
+	void *meta_user, void **dec) {
+	drwav_allocation_callbacks alloc = wav_alloc;
+	(void)onMeta; (void)meta_user;
+
+	if (path == NULL || dec == NULL) return AUDIO_RES_INVALID_ARG;
+	*dec = NULL;
 
 	wav_ctx_t *ctx = pvPortMalloc(sizeof(wav_ctx_t));
-	if (ctx == NULL) return NULL;
+	if (ctx == NULL) return AUDIO_RES_NO_MEMORY;
 	memset(ctx, 0, sizeof(wav_ctx_t));
+	alloc.pUserData = ctx;
 
-	if (F_open(&ctx->file, path, FA_READ) != FR_OK) {
+	ctx->io_res = F_open(&ctx->file, path, FA_READ);
+	if (ctx->io_res != FR_OK) {
 		vPortFree(ctx);
-		return NULL;
+		return AUDIO_RES_FS_OPEN_FAILED;
 	}
 
-	if (!drwav_init(&ctx->wav, fs_read, fs_seek, wav_on_tell, ctx->file, &wav_alloc)) {
+	if (!drwav_init(&ctx->wav, fs_read, fs_seek, wav_on_tell, ctx, &alloc)) {
+		audio_res_t res = ctx->alloc_failed ? AUDIO_RES_NO_MEMORY :
+			((ctx->io_res == FR_OK) ? AUDIO_RES_DECODER_OPEN_FAILED :
+			AUDIO_RES_FS_READ_FAILED);
 		F_close(&ctx->file);
 		vPortFree(ctx);
-		return NULL;
+		return res;
 	}
 
-	return ctx;
+	*dec = ctx;
+	return AUDIO_RES_OK;
 }
 
 /**
@@ -131,32 +151,46 @@ static void* wav_open(const uint8_t* path) {
  * @param frames 请求读取的帧数
  * @return 实际读取的帧数
  */
-static uint32_t wav_read(void* dec, float* buf, uint32_t frames) {
+static audio_res_t wav_read(void* dec, int16_t* buf, uint32_t frames,
+	uint32_t *frames_read) {
 	wav_ctx_t* ctx = (wav_ctx_t*)dec;
-	return (uint32_t)drwav_read_pcm_frames_f32(&ctx->wav, frames, buf);
+	if (ctx == NULL || buf == NULL || frames_read == NULL || frames == 0) {
+		return AUDIO_RES_INVALID_ARG;
+	}
+	ctx->io_res = FR_OK;
+	*frames_read = (uint32_t)drwav_read_pcm_frames_s16(&ctx->wav, frames, buf);
+	if (ctx->io_res != FR_OK) return AUDIO_RES_FS_READ_FAILED;
+	return (*frames_read == 0) ? AUDIO_RES_EOF : AUDIO_RES_OK;
 }
 
 /**
  * @brief 跳转到指定PCM帧
  * @param dec 解码器句柄
  * @param frame 目标帧索引
- * @return 成功返回0，失败返回-1
+ * @return 统一操作结果
  */
-static bool wav_seek(void* dec, uint32_t frame) {
+static audio_res_t wav_seek(void* dec, uint32_t frame) {
 	wav_ctx_t* ctx = (wav_ctx_t*)dec;
-	return drwav_seek_to_pcm_frame(&ctx->wav, frame) == DRWAV_SUCCESS;
+	if (ctx == NULL) return AUDIO_RES_INVALID_ARG;
+	ctx->io_res = FR_OK;
+	if (drwav_seek_to_pcm_frame(&ctx->wav, frame) == DRWAV_SUCCESS) return AUDIO_RES_OK;
+	return (ctx->io_res == FR_OK) ? AUDIO_RES_DECODER_SEEK_FAILED :
+		AUDIO_RES_FS_SEEK_FAILED;
 }
 
 /**
  * @brief 关闭解码器并释放资源
  * @param dec 解码器句柄
  */
-static void wav_close(void* dec) {
+static audio_res_t wav_close(void* dec) {
 	wav_ctx_t* ctx = (wav_ctx_t*)dec;
+	FRESULT res;
+	if (ctx == NULL) return AUDIO_RES_INVALID_ARG;
 
 	drwav_uninit(&ctx->wav);
-	F_close(&ctx->file);
+	res = F_close(&ctx->file);
 	vPortFree(ctx);
+	return (res == FR_OK) ? AUDIO_RES_OK : AUDIO_RES_FS_CLOSE_FAILED;
 }
 
 /**
@@ -164,8 +198,9 @@ static void wav_close(void* dec) {
  * @param dec 解码器句柄
  * @param info 音频元数据输出
  */
-static void wav_get_meta(void* dec, audio_meta_t* info) {
+static audio_res_t wav_get_meta(void* dec, audio_meta_t* info) {
 	wav_ctx_t* ctx = (wav_ctx_t*)dec;
+	if (ctx == NULL || info == NULL) return AUDIO_RES_INVALID_ARG;
 
 	info->sample_rate = ctx->wav.sampleRate;
 	info->channels = ctx->wav.channels;
@@ -173,6 +208,7 @@ static void wav_get_meta(void* dec, audio_meta_t* info) {
 	info->total_frames = (uint64_t)ctx->wav.totalPCMFrameCount;
 	info->duration_ms = (info->sample_rate > 0) ?
 		(uint32_t)(info->total_frames * 1000 / info->sample_rate) : 0;
+	return AUDIO_RES_OK;
 }
 
 /* wav解码器接口 */

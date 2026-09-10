@@ -4,8 +4,8 @@
 #include <string.h>
 
 
-static BootSharedMem_t bootmem __attribute__((at(0x38800000)));
-const AppHand_t apphand __attribute__((at(0x08020400))) = {
+static BootSharedMem_t bootmem __attribute__((at(BOOT_SHARED_ADD)));
+const AppHand_t apphand __attribute__((at(APP_HAND_ADDRESS))) = {
     .magic = BOOT_SHARED_MAGIC,
     .build_date = __DATE__,
     .build_time = __TIME__
@@ -28,14 +28,12 @@ void BootShared_Init(void) {
 void BootShared_Update(const uint8_t *path) {
     uint8_t tmp[16] = {0};
 
-    BootShared_Init();
-
     size_t len = strlen((const char *)path);
     if (len > 15)
         len = 15;
     memcpy(tmp, path, len);
 
-    // 由于ECC单子缓存，强制使用32位对齐写入
+    // 由于ECC单字缓存，强制使用32位对齐写入
     uint32_t *dst = (uint32_t *)bootmem.filePath;
     uint32_t *src = (uint32_t *)tmp;
     for (int i = 0; i < 4; i++)

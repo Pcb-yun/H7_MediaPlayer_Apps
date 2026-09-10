@@ -277,7 +277,7 @@ targets:
         - USE_HAL_DRIVER
         - STM32H723xx
         - STM32_THREAD_SAFE_STRATEGY=4
-        - USE_WG=0
+        - USE_WG=1
       incList:
         - Core/Inc
         - FATFS/Target
