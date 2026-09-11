@@ -7,6 +7,7 @@ LR_IROM1 0x08020000 0x000E0000  {
    .ANY (+XO)
    .ANY (+RO)
   }
+
   ; 内部RAM区 起始地址 大小
   RW_IRAM1 0x24000000 0x00050000  {
    .ANY (+RW +ZI)
@@ -36,10 +37,31 @@ LR_IROM1 0x08020000 0x000E0000  {
   RW_BACKUP 0x38800000 0x00001000  {
     *(.BACKUP)
   }
+}
 
-  ; 外部W25Q64 Flash区 起始地址 大小
-  RW_W25Q64 0x90000000 0x00800000  {
-    *(.W25Q64)
-  }
+; 外部W25Q64 Flash区 起始地址 大小
+LR_W25Q64 0x90000000 0x00800000 {
+    ER_W25Q64 0x90000000 0x00800000 {
+        Art_Data.o (+RO)      ; 图片数据
+        Art_show.o (+RO)      ; 图片显示函数
 
+        cc936.o (+RO)         ; CC936模块驱动
+
+        cat.o (+RO)           ; cat命令
+        hexdump.o (+RO)       ; hexdump命令
+
+        rtos_utils.o (+RO)    ; RTOS工具集
+
+        game.o (+RO)         	; game shell命令组入口
+        snake.o (+RO)        	; 贪吃蛇
+        snake_tiny.o (+RO)   	; 精简版贪吃蛇
+        2048.o (+RO)         	; 2048游戏
+        conf.o (+RO)         	; 配置数据
+        gameover.o (+RO)     	; 结束界面
+        inter.o (+RO)        	; 界面元素
+        twister.o (+RO)      	; 旋转特效
+
+        *(shellCommand)
+        *(.W25Q64)
+    }
 }

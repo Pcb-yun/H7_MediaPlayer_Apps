@@ -168,15 +168,15 @@ static void Mutex_Info(void) {
         "ID        Name                  Owner         State\r\n"
         "---------------------------------------------------------");
 
-//     extern osMutexId_t Pose_MutexHandle;
-//
-//     if (Pose_MutexHandle != NULL) {
-//         osThreadId_t owner = osMutexGetOwner(Pose_MutexHandle);
-//         const char *owner_name = owner ? osThreadGetName(owner) : "none";
-//         logPrintln("%p  %-20s  %-12s  %s",
-//                   Pose_MutexHandle, "Pose_Mutex",
-//                   owner_name ? owner_name : "<unknown>", owner ? "Locked" : "Unlocked");
-//     }
+    extern osMutexId_t Sem_ShellsendHandle;
+
+    if (Sem_ShellsendHandle != NULL) {
+        osThreadId_t owner = osMutexGetOwner(Sem_ShellsendHandle);
+        const char *owner_name = owner ? osThreadGetName(owner) : "none";
+        logPrintln("%p  %-20s  %-12s  %s",
+                   Sem_ShellsendHandle, "Sem_Shellsend",
+                   owner_name ? owner_name : "<unknown>", owner ? "Locked" : "Unlocked");
+    }
 
 }
 
@@ -200,6 +200,7 @@ static void Event_Info(void) {
         logPrintln("%-20s  %s", "APP_NEED_USART", (flags & 0x02) ? "SET" : "RESET");
         logPrintln("%-20s  %s", "SHELL_ONLINE", (flags & 0x04) ? "SET" : "RESET");
         logPrintln("%-20s  %s", "FS_MOUNTED", (flags & 0x08) ? "SET" : "RESET");
+        logPrintln("%-20s  %s", "USART1_REFRESH", (flags & 0x10) ? "SET" : "RESET");
 
     }
 }
@@ -261,47 +262,47 @@ static void OS_Error(void) {
 }
 
 /**
- * @brief 校验文件名是否为 8.3 短文件名格式
+ * @brief 校验文件名是否为 8.3 短文件名格式，且扩展名必须为 hex
  * @param path 待校验文件名
  * @retval 1 合法；0 非法
  */
-static uint8_t Is_Valid_83_Name(const uint8_t *path) {
-    uint8_t mainLen = 0;    // 主文件名长度
-    uint8_t extLen = 0;     // 扩展名长度
+static uint8_t Is_Valid_Name(const uint8_t *path) {
     const uint8_t *p = path;
+    const uint8_t *dot = NULL;    // 扩展名分隔符位置
+    uint8_t mainLen = 0;    // 主文件名长度
 
     if(p == NULL || *p == '\0') {
         return 0;
     }
 
-    // 校验主文件名（1~8 个字符，至 '.')
+    // 定位到扩展名分隔符 '.'
     while(*p != '\0' && *p != '.') {
-        if(!((*p >= '0' && *p <= '9') || (*p >= 'A' && *p <= 'Z') ||
-             (*p >= 'a' && *p <= 'z') || *p == '_' || *p == '-')) {
-            return 0;
-        }
-        mainLen++;
         p++;
     }
+    if(*p != '.') {
+        return 0;
+    }
+    dot = p;
+    p++;
+
+    // 判断扩展名是否为 hex（忽略大小写，且长度必须为 3）
+    if(!((p[0] == 'h' || p[0] == 'H') &&
+         (p[1] == 'e' || p[1] == 'E') &&
+         (p[2] == 'x' || p[2] == 'X') &&
+         p[3] == '\0')) {
+        return 0;
+    }
+
+    // 判断文件名长度（主文件名 1~8 个字符）
+    mainLen = (uint8_t)(dot - path);
     if(mainLen == 0 || mainLen > 8) {
         return 0;
     }
 
-    // 校验扩展名（1~3 个字符，可省略）
-    if(*p == '.') {
-        p++;
-        while(*p != '\0') {
-            if(!((*p >= '0' && *p <= '9') || (*p >= 'A' && *p <= 'Z') ||
-                 (*p >= 'a' && *p <= 'z') || *p == '_' || *p == '-')) {
-                return 0;
-            }
-            extLen++;
-            if(extLen > 3) {
-                return 0;
-            }
-            p++;
-        }
-        if(extLen == 0) {
+    // 判断文件名有效性（仅允许数字、字母、'_'、'-'）
+    for(p = path; p < dot; p++) {
+        if(!((*p >= '0' && *p <= '9') || (*p >= 'A' && *p <= 'Z') ||
+             (*p >= 'a' && *p <= 'z') || *p == '_' || *p == '-')) {
             return 0;
         }
     }
@@ -313,7 +314,7 @@ static uint8_t Is_Valid_83_Name(const uint8_t *path) {
  * @param path 更新文件名称
  */
 static void OS_Update(uint8_t *path) {
-    if(!Is_Valid_83_Name(path)) {
+    if(!Is_Valid_Name(path)) {
         logPrintln("invalid file name, must be 8.3 format");
         return;
     }

@@ -3,7 +3,6 @@
 #include "stm32h7xx_hal.h"
 #include <string.h>
 
-
 static BootSharedMem_t bootmem __attribute__((at(BOOT_SHARED_ADD)));
 const AppHand_t apphand __attribute__((at(APP_HAND_ADDRESS))) = {
     .magic = BOOT_SHARED_MAGIC,

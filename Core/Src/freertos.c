@@ -32,6 +32,7 @@
 #include "shell.h"
 #include "sdmmc.h"
 #include "fatfs.h"
+#include "w25q64_port.h"
 
 /* USER CODE END Includes */
 
@@ -74,6 +75,11 @@ const osThreadAttr_t Online_Check_attributes = {
   .name = "Online_Check",
   .stack_size = 87 * 4,
   .priority = (osPriority_t) osPriorityLow3,
+};
+/* Definitions for Sem_Shellsend */
+osSemaphoreId_t Sem_ShellsendHandle;
+const osSemaphoreAttr_t Sem_Shellsend_attributes = {
+  .name = "Sem_Shellsend"
 };
 /* Definitions for System_Status */
 osEventFlagsId_t System_StatusHandle;
@@ -212,6 +218,10 @@ void MX_FREERTOS_Init(void) {
   /* add mutexes, ... */
   /* USER CODE END RTOS_MUTEX */
 
+  /* Create the semaphores(s) */
+  /* creation of Sem_Shellsend */
+  Sem_ShellsendHandle = osSemaphoreNew(1, 1, &Sem_Shellsend_attributes);
+
   /* USER CODE BEGIN RTOS_SEMAPHORES */
   /* add semaphores, ... */
   /* USER CODE END RTOS_SEMAPHORES */
@@ -268,6 +278,14 @@ void Sys_Init_Task(void *argument)
   my_printf("[warn] Debug Mode, Watch Dog Disabled.\r\n");
 #endif
 
+  SHOW_DMESG(dmesg_wait, "Initialize W25Q64");
+  if (W25Q64_Init()) {
+    SHOW_DMESG(dmesg_ok, NULL);
+  } else {
+    SHOW_DMESG(dmesg_fail, NULL);
+    Error_Handler();
+  }
+
   SHOW_DMESG(dmesg_wait, "Initialize BootShared");
   extern void BootShared_Init(void);
   BootShared_Init();
@@ -297,11 +315,6 @@ void Sys_Init_Task(void *argument)
   MX_SAI1_Init();
   Show_dmesg(dmesg_ok, NULL);
 
-  // Show_dmesg(dmesg_wait, "Initialize W25Q64");
-  // extern bool W25Q64_Init(void);
-  // W25Q64_Init();
-  // Show_dmesg(dmesg_ok, NULL);
-
   SHOW_DMESG(dmesg_wait, "Initialize Shell");
   extern void userShellInit(void);
   userShellInit();
@@ -314,6 +327,8 @@ void Sys_Init_Task(void *argument)
 
   extern Shell shell;
   Shell_New_Convo(&shell);
+
+  osEventFlagsSet(System_StatusHandle, USART1_REFRESH);
   osEventFlagsSet(System_StatusHandle, SYS_INIT_COMPLETE);
 
   vTaskDelete(NULL);

@@ -23,7 +23,7 @@ char shellBuffer[SHELL_BUFFER_SIZE] __attribute__((section(".DTCM")));
 
 /**
  * @brief 用户shell写
- * @param data 数据
+ * @param data 数据指针
  * @param len 数据长度
  * @return 实际写入的数据长度
  */

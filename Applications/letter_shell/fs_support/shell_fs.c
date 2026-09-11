@@ -110,23 +110,29 @@ void userShellFsInit(void) {
 
 /**
  * @brief 改变当前路径(shell调用)
- *
- * @param dir 路径
+ * @param argc 参数个数
+ * @param argv 参数列表
  */
-static void shellCD(char *dir)
+static void shellCD(int argc, char *argv[])
 {
-    Shell *shell = shellGetCurrent();
-    ShellFs *shellFs = shellCompanionGet(shell, SHELL_COMPANION_ID_FS);
-    SHELL_ASSERT(shellFs, return);
-    if (shellFs->chdir(dir) != 0)
-    {
-        shellWriteString(shell, "error: ");
-        shellWriteString(shell, dir);
-        shellWriteString(shell, " is not a directory\r\n");
-    }
-    shellFs->getcwd(shellFs->info.path, shellFs->info.pathLen);
+	Shell *shell = shellGetCurrent();
+	ShellFs *shellFs = shellCompanionGet(shell, SHELL_COMPANION_ID_FS);
+	SHELL_ASSERT(shellFs, return);
+
+	if (argc != 2) {
+		shellWriteString(shell, "Usage: cd <dir>\r\n");
+		return;
+	}
+
+	if (shellFs->chdir(argv[1]) != 0)
+	{
+		shellWriteString(shell, "error: ");
+		shellWriteString(shell, argv[1]);
+		shellWriteString(shell, " is not a directory\r\n");
+	}
+	shellFs->getcwd(shellFs->info.path, shellFs->info.pathLen);
 }
-SHELL_EXPORT_CMD(SHELL_CMD_PERMISSION(0)|SHELL_CMD_TYPE(SHELL_TYPE_CMD_FUNC)|SHELL_CMD_DISABLE_RETURN,
+SHELL_EXPORT_CMD(SHELL_CMD_PERMISSION(0)|SHELL_CMD_TYPE(SHELL_TYPE_CMD_MAIN)|SHELL_CMD_DISABLE_RETURN,
 cd, shellCD, change dir);
 
 /**
@@ -155,9 +161,10 @@ ls, shellLS, list all files);
 
 /**
  * @brief 删除文件(shell调用)
- * @param file 文件名
+ * @param argc 参数个数
+ * @param argv 参数列表
  */
-static void shellRM(char *file) {
+static void shellRM(int argc, char *argv[]) {
 	FRESULT res;
 	TCHAR wfile[_MAX_LFN + 1];
 	uint8_t resolved[SHELL_FS_PATH_BUFFER];
@@ -165,37 +172,40 @@ static void shellRM(char *file) {
 
 	if (!FS_Check()) {
 		logPrintln("File system is not mounted"); return;
+	} else if (argc != 2) {
+		logPrintln("Usage: rm <file>"); return;
 	}
 
 	// 解析路径后转换为UTF-16
-	path_resolve((const uint8_t *)file, resolved, sizeof(resolved));
+	path_resolve((const uint8_t *)argv[1], resolved, sizeof(resolved));
 	utf8to16((const uint8_t *)resolved, wfile, sizeof(wfile) / sizeof(TCHAR));
 
 	// 检查类型，目录不允许用rm删除
 	res = f_stat(wfile, &fno);
 	if (res != FR_OK) {
-		logPrintln("Fail to access \"%s\": %s", file, FATFS_GetString(res));
+		logPrintln("Fail to access \"%s\": %s", argv[1], FATFS_GetString(res));
 		return;
 	}
 	if (fno.fattrib & AM_DIR) {
-		logPrintln("\"%s\" is a directory", file);
+		logPrintln("\"%s\" is a directory", argv[1]);
 		return;
 	}
 
 	res = f_unlink(wfile);
 	if (res != FR_OK) {
-		logPrintln("Fail to remove file \"%s\": %s", file, FATFS_GetString(res));
+		logPrintln("Fail to remove file \"%s\": %s", argv[1], FATFS_GetString(res));
 		return;
 	}
 }
-SHELL_EXPORT_CMD(SHELL_CMD_PERMISSION(0)|SHELL_CMD_TYPE(SHELL_TYPE_CMD_FUNC)|SHELL_CMD_DISABLE_RETURN,
+SHELL_EXPORT_CMD(SHELL_CMD_PERMISSION(0)|SHELL_CMD_TYPE(SHELL_TYPE_CMD_MAIN)|SHELL_CMD_DISABLE_RETURN,
 rm, shellRM, remove file);
 
 /**
  * @brief 删除目录(shell调用)
- * @param file 目录名
+ * @param argc 参数个数
+ * @param argv 参数列表
  */
-static void shellRMDIR(char *file) {
+static void shellRMDIR(int argc, char *argv[]) {
 	FRESULT res;
 	TCHAR wfile[_MAX_LFN + 1];
 	uint8_t resolved[SHELL_FS_PATH_BUFFER];
@@ -203,56 +213,61 @@ static void shellRMDIR(char *file) {
 
 	if (!FS_Check()) {
 		logPrintln("File system is not mounted"); return;
+	} else if (argc != 2) {
+		logPrintln("Usage: rmdir <dir>"); return;
 	}
 
 	// 解析路径后转换为UTF-16
-	path_resolve((const uint8_t *)file, resolved, sizeof(resolved));
+	path_resolve((const uint8_t *)argv[1], resolved, sizeof(resolved));
 	utf8to16((const uint8_t *)resolved, wfile, sizeof(wfile) / sizeof(TCHAR));
 
 	// 检查类型，非目录不允许用rmdir删除
 	res = f_stat(wfile, &fno);
 	if (res != FR_OK) {
-		logPrintln("Fail to access \"%s\": %s", file, FATFS_GetString(res));
+		logPrintln("Fail to access \"%s\": %s", argv[1], FATFS_GetString(res));
 		return;
 	}
 	if (!(fno.fattrib & AM_DIR)) {
-		logPrintln("\"%s\" is not a directory", file);
+		logPrintln("\"%s\" is not a directory", argv[1]);
 		return;
 	}
 
 	res = f_rmdir(wfile);
 	if (res != FR_OK) {
-		logPrintln("Fail to remove directory \"%s\": %s", file, FATFS_GetString(res));
+		logPrintln("Fail to remove directory \"%s\": %s", argv[1], FATFS_GetString(res));
 		return;
 	}
 }
-SHELL_EXPORT_CMD(SHELL_CMD_PERMISSION(0)|SHELL_CMD_TYPE(SHELL_TYPE_CMD_FUNC)|SHELL_CMD_DISABLE_RETURN,
+SHELL_EXPORT_CMD(SHELL_CMD_PERMISSION(0)|SHELL_CMD_TYPE(SHELL_TYPE_CMD_MAIN)|SHELL_CMD_DISABLE_RETURN,
 rmdir, shellRMDIR, remove directory);
 
 /**
  * @brief 创建目录(shell调用)
- * @param file 目录名
+ * @param argc 参数个数
+ * @param argv 参数列表
  */
-static void shellMKDIR(char *file) {
+static void shellMKDIR(int argc, char *argv[]) {
 	FRESULT res;
 	TCHAR wfile[_MAX_LFN + 1];
 	uint8_t resolved[SHELL_FS_PATH_BUFFER];
 
 	if (!FS_Check()) {
 		logPrintln("File system is not mounted"); return;
+	} else if (argc != 2) {
+		logPrintln("Usage: mkdir <dir>"); return;
 	}
 
 	// 解析路径后转换为UTF-16并创建目录
-	path_resolve((const uint8_t *)file, resolved, sizeof(resolved));
+	path_resolve((const uint8_t *)argv[1], resolved, sizeof(resolved));
 	utf8to16((const uint8_t *)resolved, wfile, sizeof(wfile) / sizeof(TCHAR));
 	res = f_mkdir(wfile);
 	if (res != FR_OK) {
-		logPrintln("Fail to create directory \"%s\": %s", file, FATFS_GetString(res));
+		logPrintln("Fail to create directory \"%s\": %s", argv[1], FATFS_GetString(res));
 		return;
 	}
-	logPrintln("Created directory \"%s\"", file);
+	logPrintln("Created directory \"%s\"", argv[1]);
 }
-SHELL_EXPORT_CMD(SHELL_CMD_PERMISSION(0)|SHELL_CMD_TYPE(SHELL_TYPE_CMD_FUNC)|SHELL_CMD_DISABLE_RETURN,
+SHELL_EXPORT_CMD(SHELL_CMD_PERMISSION(0)|SHELL_CMD_TYPE(SHELL_TYPE_CMD_MAIN)|SHELL_CMD_DISABLE_RETURN,
 mkdir, shellMKDIR, create directory);
 
 /**

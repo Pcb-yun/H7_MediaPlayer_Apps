@@ -31,11 +31,20 @@
 #include "Events.h"
 #include "log.h"
 
+
 static uint8_t usart1_rx_buf[USART1_RX_BUF_SIZE] __attribute__((section(".RAM_D2")));
 static uint8_t usart1_tx_chunk_buf[USART1_TX_BUF_SIZE] __attribute__((section(".RAM_D2")));
 
-static StreamBufferHandle_t usart1_rx_stream = NULL;
-static StreamBufferHandle_t usart1_tx_stream = NULL;
+static uint8_t usart1_stream_tx_buf[USART1_STREAM_TX_BUF_SIZE] __attribute__((section(".DTCM")));
+static uint8_t usart1_stream_rx_buf[USART1_STREAM_RX_BUF_SIZE] __attribute__((section(".DTCM")));
+
+static StaticStreamBuffer_t usart1_rx_stream_struct __attribute__((section(".DTCM")));
+static StaticStreamBuffer_t usart1_tx_stream_struct __attribute__((section(".DTCM")));
+
+static __attribute__((section(".DTCM")))
+StreamBufferHandle_t usart1_rx_stream = NULL;
+static __attribute__((section(".DTCM")))
+StreamBufferHandle_t usart1_tx_stream = NULL;
 
 /* USER CODE END 0 */
 
@@ -206,12 +215,14 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
  * @brief  创建串口收发流缓冲
  */
 void usart1_stream_init(void) {
-  if (usart1_rx_stream == NULL) {
-    usart1_rx_stream = xStreamBufferCreate(USART1_RX_BUF_SIZE, 1);
-  }
-  if (usart1_tx_stream == NULL) {
-    usart1_tx_stream = xStreamBufferCreate(USART1_TX_BUF_SIZE, 1);
-  }
+	if (usart1_rx_stream == NULL) {
+		usart1_rx_stream = xStreamBufferCreateStatic(USART1_STREAM_RX_BUF_SIZE, 1,
+			usart1_stream_rx_buf, &usart1_rx_stream_struct);
+	}
+	if (usart1_tx_stream == NULL) {
+		usart1_tx_stream = xStreamBufferCreateStatic(USART1_STREAM_TX_BUF_SIZE, 1,
+			usart1_stream_tx_buf, &usart1_tx_stream_struct);
+	}
 }
 
 /**
@@ -270,7 +281,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
 		huart->RxState = HAL_UART_STATE_READY;
 		huart->gState = HAL_UART_STATE_READY;
 
-		HAL_UARTEx_ReceiveToIdle_DMA(huart, usart1_rx_buf, USART1_RX_BUF_SIZE);
+    HAL_UARTEx_ReceiveToIdle_DMA(huart, usart1_rx_buf, USART1_RX_BUF_SIZE);
   }
 }
 
@@ -293,14 +304,29 @@ void USART1_Transmit_DMA(uint8_t *data, uint32_t len) {
 	if (data == NULL || len == 0) {
 		return;
 	}
-	xStreamBufferSend(usart1_tx_stream, data, len, portMAX_DELAY);
 
-	if (!usart1_tx_is_busy()) {
-		size_t n = xStreamBufferReceive(usart1_tx_stream, usart1_tx_chunk_buf, USART1_TX_BUF_SIZE, 0);
-		if (n != 0) {
-			HAL_UART_Transmit_DMA(&huart1, usart1_tx_chunk_buf, (uint16_t)n);
-		}
-	}
+  extern osSemaphoreId_t Sem_ShellsendHandle;
+  osSemaphoreAcquire(Sem_ShellsendHandle, osWaitForever);
+
+  uint32_t send_len = xStreamBufferSend(usart1_tx_stream, data, len, portMAX_DELAY);
+  data += send_len;
+
+  if (!usart1_tx_is_busy()) {
+  	size_t n = xStreamBufferReceive(usart1_tx_stream, usart1_tx_chunk_buf, USART1_TX_BUF_SIZE, 0);
+  	if (n != 0) {
+  		HAL_UART_Transmit_DMA(&huart1, usart1_tx_chunk_buf, (uint16_t)n);
+  	}
+  }
+
+  while (send_len < len) {
+    osEventFlagsWait(System_StatusHandle, USART1_REFRESH, osFlagsWaitAny,osWaitForever);
+
+    size_t once = xStreamBufferSend(usart1_tx_stream, data, len - send_len, portMAX_DELAY);
+    send_len += once;
+    data += once;
+  }
+
+	osSemaphoreRelease(Sem_ShellsendHandle);
 }
 
 /**
@@ -314,6 +340,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
 		if (len != 0) {
 			HAL_UART_Transmit_DMA(&huart1, usart1_tx_chunk_buf, (uint16_t)len);
 		}
+    osEventFlagsSet(System_StatusHandle, USART1_REFRESH);
 	}
 }
 
@@ -364,4 +391,3 @@ void my_print(const char *str, uint32_t len) {
 }
 
 /* USER CODE END 1 */
-

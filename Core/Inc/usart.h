@@ -35,8 +35,10 @@ extern "C" {
 extern UART_HandleTypeDef huart1;
 
 /* USER CODE BEGIN Private defines */
-#define USART1_RX_BUF_SIZE 1030
-#define USART1_TX_BUF_SIZE 1030
+#define USART1_RX_BUF_SIZE 1056
+#define USART1_TX_BUF_SIZE 1056
+#define USART1_STREAM_RX_BUF_SIZE 2048
+#define USART1_STREAM_TX_BUF_SIZE 4096
 
 /* USER CODE END Private defines */
 

@@ -28,6 +28,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "octospi.h"
 #include "message.h"
 #include "stdbool.h"
 #include <string.h>
@@ -235,14 +236,19 @@ void Error_Handler(void)
   __disable_irq();
   my_printf("\r\n==================== Error_Handler Call ====================\r\n");
 
-  extern bool find_art(const char *name, char **data_ptr);
-  char *data = NULL;
-  if (find_art("NINA", &data)) {
-    my_print(data, strlen(data));
+  if (HAL_OSPI_IsMemoryMapped(&hospi1) != 0U) {
+    extern bool find_art(const char *name, char **data_ptr);
+    char *data = NULL;
+    if (find_art("NINA", &data)) {
+      my_print(data, strlen(data));
+    }
   }
 
-  while (1)
-  {
+  while (1) {
+    uint32_t delay = 0;
+
+    HAL_GPIO_TogglePin(GPIOG, GPIO_PIN_7);
+    for (delay = 0; delay < 0x8FFFFF; delay++);
   }
   /* USER CODE END Error_Handler_Debug */
 }

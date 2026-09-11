@@ -23,6 +23,7 @@ extern osEventFlagsId_t System_StatusHandle;
 #define APP_NEED_USART (1UL << 1)       // 需要使用串口
 #define SHELL_ONLINE (1UL << 2)         // shell在线
 #define FS_MOUNTED (1UL << 3)           // 文件系统已挂载
+#define USART1_REFRESH (1UL << 4)       // USART1缓存需要刷新
 
 
 #ifdef __cplusplus

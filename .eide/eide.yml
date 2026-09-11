@@ -181,6 +181,11 @@ virtualFolder:
             - path: Middlewares/Third_Party/LibJPEG/source/jutils.c
             - path: Middlewares/Third_Party/LibJPEG/source/jmemnobs.c
           folders: []
+        - name: lvgl
+          files:
+            - path: Applications/lvgl/lvgl_port.c
+            - path: Applications/lvgl/lvgl_user.c
+          folders: []
     - name: ansi_art
       files:
         - path: Applications/ANSI_Art/Art_Data.c
@@ -222,11 +227,6 @@ virtualFolder:
         - path: Applications/letter_shell/game/snake/snake.c
         - path: Applications/letter_shell/game/snake/snake_tiny.c
         - path: Applications/letter_shell/game/game.c
-      folders: []
-    - name: lvgl
-      files:
-        - path: Applications/lvgl/lvgl_port.c
-        - path: Applications/lvgl/lvgl_user.c
       folders: []
     - name: xy_modem
       files:
@@ -347,6 +347,9 @@ targets:
           global:
             output-debug-info: enable
           linker:
+            $outputTaskExcludes:
+              - .bin
+              - .s19
             misc-controls: --keep shellCommand*
             output-format: elf
         scatterFilePath: MDK-ARM/stm32h723xg_flash.sct
@@ -438,5 +441,5 @@ targets:
         baseAddr: "0x08000000"
         bin: ""
         interface: cmsis-dap
-        target: stm32h7x
+        target: ${workspaceFolder}/LXB_LXB723ZG_P1
     uploader: OpenOCD
