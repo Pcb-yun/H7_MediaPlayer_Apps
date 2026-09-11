@@ -69,12 +69,12 @@ typedef struct {
 
 /*------------------------------------------------ 函数声明 ----------------------------------------------*/
 
-void LCD_Init(void) __attribute__((section(".itcm")));   // 初始化LCD
+void LCD_Init(void);   // 初始化LCD
 
-void LCD_SetAddress(uint16_t x1,uint16_t y1,uint16_t x2,uint16_t y2) __attribute__((section(".itcm")));	// 设置坐标
-void LCD_SetColor(uint32_t Color) __attribute__((section(".itcm"))); 				   //	设置画笔颜色
-void LCD_SetBackColor(uint32_t Color) __attribute__((section(".itcm")));  				//	设置背景颜色
-void LCD_SetDirection(uint8_t direction) __attribute__((section(".itcm")));  	      //	设置显示方向
+void LCD_SetAddress(uint16_t x1,uint16_t y1,uint16_t x2,uint16_t y2);	// 设置坐标
+void LCD_SetColor(uint32_t Color); 				   //	设置画笔颜色
+void LCD_SetBackColor(uint32_t Color);  				//	设置背景颜色
+void LCD_SetDirection(uint8_t direction);  	      //	设置显示方向
 
 /*--------------------------------------------- LCD其它引脚 -----------------------------------------------*/
 

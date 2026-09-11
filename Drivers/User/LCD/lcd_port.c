@@ -5,3 +5,4 @@
  */
 
 #include "lcd_port.h"
+#include "lcd_spi_154.h"

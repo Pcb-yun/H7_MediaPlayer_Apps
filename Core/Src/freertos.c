@@ -67,7 +67,7 @@ osThreadId_t ShellHandle;
 const osThreadAttr_t Shell_attributes = {
   .name = "Shell",
   .stack_size = 2048 * 4,
-  .priority = (osPriority_t) osPriorityNormal2,
+  .priority = (osPriority_t) osPriorityAboveNormal2,
 };
 /* Definitions for Online_Check */
 osThreadId_t Online_CheckHandle;
@@ -75,6 +75,13 @@ const osThreadAttr_t Online_Check_attributes = {
   .name = "Online_Check",
   .stack_size = 87 * 4,
   .priority = (osPriority_t) osPriorityLow3,
+};
+/* Definitions for lvgl */
+osThreadId_t lvglHandle;
+const osThreadAttr_t lvgl_attributes = {
+  .name = "lvgl",
+  .stack_size = 1024 * 4,
+  .priority = (osPriority_t) osPriorityNormal4,
 };
 /* Definitions for Sem_Shellsend */
 osSemaphoreId_t Sem_ShellsendHandle;
@@ -95,6 +102,7 @@ const osEventFlagsAttr_t System_Status_attributes = {
 void Sys_Init_Task(void *argument);
 extern void Shell_Task(void *argument);
 extern void Online_Check_Task(void *argument);
+extern void lvgl_Task(void *argument);
 
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
@@ -244,6 +252,9 @@ void MX_FREERTOS_Init(void) {
   /* creation of Online_Check */
   Online_CheckHandle = osThreadNew(Online_Check_Task, NULL, &Online_Check_attributes);
 
+  /* creation of lvgl */
+  lvglHandle = osThreadNew(lvgl_Task, NULL, &lvgl_attributes);
+
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
   /* USER CODE END RTOS_THREADS */
@@ -315,6 +326,12 @@ void Sys_Init_Task(void *argument)
   MX_SAI1_Init();
   Show_dmesg(dmesg_ok, NULL);
 
+  // Show_dmesg(dmesg_wait, "Initialize LVGL");
+  // extern bool lvgl_port_init(void);
+  // if (lvgl_port_init()) SHOW_DMESG(dmesg_ok, NULL);
+  // else SHOW_DMESG(dmesg_fail, NULL);
+  // Show_dmesg(dmesg_ok, NULL);
+
   SHOW_DMESG(dmesg_wait, "Initialize Shell");
   extern void userShellInit(void);
   userShellInit();
@@ -339,3 +356,4 @@ void Sys_Init_Task(void *argument)
 /* USER CODE BEGIN Application */
 
 /* USER CODE END Application */
+

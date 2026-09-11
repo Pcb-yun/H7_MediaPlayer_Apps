@@ -11,6 +11,10 @@
 extern "C" {
 #endif /* __cplusplus */
 
+#include <stdbool.h>
+
+bool lvgl_port_init(void);
+
 
 
 
