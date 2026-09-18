@@ -150,9 +150,8 @@ static void shellLS(void)
     buffer = SHELL_MALLOC(SHELL_FS_LIST_FILE_BUFFER_MAX);
     SHELL_ASSERT(buffer, return);
     count = shellFs->listdir(shellGetPath(shell), buffer, SHELL_FS_LIST_FILE_BUFFER_MAX);
-    (void)count;
 
-    shellWriteString(shell, buffer);
+    if (count > 0) shellWriteString(shell, buffer);
 
     SHELL_FREE(buffer);
 }

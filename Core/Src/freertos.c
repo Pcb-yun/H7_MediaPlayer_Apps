@@ -37,6 +37,7 @@
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
+typedef StaticTask_t osStaticThreadDef_t;
 /* USER CODE BEGIN PTD */
 
 /* USER CODE END PTD */
@@ -64,24 +65,39 @@ const osThreadAttr_t Sys_Init_attributes = {
 };
 /* Definitions for Shell */
 osThreadId_t ShellHandle;
+uint32_t ShellBuffer[ 2048 ];
+osStaticThreadDef_t ShellControlBlock;
 const osThreadAttr_t Shell_attributes = {
   .name = "Shell",
-  .stack_size = 2048 * 4,
+  .cb_mem = &ShellControlBlock,
+  .cb_size = sizeof(ShellControlBlock),
+  .stack_mem = &ShellBuffer[0],
+  .stack_size = sizeof(ShellBuffer),
   .priority = (osPriority_t) osPriorityAboveNormal2,
 };
 /* Definitions for Online_Check */
 osThreadId_t Online_CheckHandle;
+uint32_t Online_CheckBuffer[ 87 ];
+osStaticThreadDef_t Online_CheckControlBlock;
 const osThreadAttr_t Online_Check_attributes = {
   .name = "Online_Check",
-  .stack_size = 87 * 4,
-  .priority = (osPriority_t) osPriorityLow3,
+  .cb_mem = &Online_CheckControlBlock,
+  .cb_size = sizeof(Online_CheckControlBlock),
+  .stack_mem = &Online_CheckBuffer[0],
+  .stack_size = sizeof(Online_CheckBuffer),
+  .priority = (osPriority_t) osPriorityLow2,
 };
 /* Definitions for lvgl */
 osThreadId_t lvglHandle;
+uint32_t lvglBuffer[ 2048 ];
+osStaticThreadDef_t lvglControlBlock;
 const osThreadAttr_t lvgl_attributes = {
   .name = "lvgl",
-  .stack_size = 1024 * 4,
-  .priority = (osPriority_t) osPriorityNormal4,
+  .cb_mem = &lvglControlBlock,
+  .cb_size = sizeof(lvglControlBlock),
+  .stack_mem = &lvglBuffer[0],
+  .stack_size = sizeof(lvglBuffer),
+  .priority = (osPriority_t) osPriorityNormal5,
 };
 /* Definitions for Sem_Shellsend */
 osSemaphoreId_t Sem_ShellsendHandle;
@@ -302,6 +318,11 @@ void Sys_Init_Task(void *argument)
   BootShared_Init();
   SHOW_DMESG(dmesg_ok, NULL);
 
+  SHOW_DMESG(dmesg_wait, "Initialize DTS");
+  extern void MX_DTS_Init(void);
+  MX_DTS_Init();
+  SHOW_DMESG(dmesg_ok, NULL);
+
   SHOW_DMESG(dmesg_wait, "Initialize SDMMC1");
   if (SD_Init()) {
     SHOW_DMESG(dmesg_ok, NULL);
@@ -326,11 +347,10 @@ void Sys_Init_Task(void *argument)
   MX_SAI1_Init();
   Show_dmesg(dmesg_ok, NULL);
 
-  // Show_dmesg(dmesg_wait, "Initialize LVGL");
-  // extern bool lvgl_port_init(void);
-  // if (lvgl_port_init()) SHOW_DMESG(dmesg_ok, NULL);
-  // else SHOW_DMESG(dmesg_fail, NULL);
-  // Show_dmesg(dmesg_ok, NULL);
+  Show_dmesg(dmesg_wait, "Initialize LVGL");
+  extern bool lvgl_port_init(void);
+  if (lvgl_port_init()) SHOW_DMESG(dmesg_ok, NULL);
+  else SHOW_DMESG(dmesg_fail, NULL);
 
   SHOW_DMESG(dmesg_wait, "Initialize Shell");
   extern void userShellInit(void);

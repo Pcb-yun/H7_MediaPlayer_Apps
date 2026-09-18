@@ -14,14 +14,13 @@
 
 
 /* -------------- 播放器参数配置 -------------- */
-#define AUDIO_DEFAULT_VOLUME    50          // 默认初始音量
+#define AUDIO_DEFAULT_VOLUME    5           // 默认初始音量
 #define AUDIO_SKEEP_FAILFRAME   1           // 是否在解码失败时 跳过当前帧重新同步(仅flac)
-#define AUDIO_RESERVED_MEM  (2 * 1024)      // 为系统运行保留的内存
 #define AUDIO_PLAY_CH           2           // SAI声道数
 #define AUDIO_META_TAG_LEN      32          // 元数据标签(歌名/艺术家/专辑)缓冲大小
 #define AUDIO_SEEK_STEP         5           // 左右键跳进步长(秒)
-#define AUDIO_BUFFER_TARGET_MS  200         // DMA每半区目标时长(ms)
-#define AUDIO_BUFFER_MIN_MS     40          // DMA每半区最低安全时长(ms)
+#define AUDIO_BUFFER_TARGET_MS  70         // DMA每半区目标时长(ms)
+#define AUDIO_BUFFER_MIN_MS     30          // DMA每半区最低安全时长(ms)
 
 
 /* -------------- 播放器界面配置 -------------- */

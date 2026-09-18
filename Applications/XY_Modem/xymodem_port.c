@@ -18,6 +18,10 @@
 #include <string.h>
 #include <stdbool.h>
 
+#if XYMODEM_FILE_CACHE_SIZE < 1024
+#error "XYMODEM_FILE_CACHE_SIZE must be greater than 1024 Bytes"
+#endif
+
 
 /* XYmodem 端口上下文 */
 struct XYM_Port_t {
@@ -25,7 +29,6 @@ struct XYM_Port_t {
 	xym_session_t session;
 	uint8_t *packet_buf;	// 协议包缓冲
 	uint8_t *file_cache;	// 文件收发缓冲
-	uint32_t cache_size;	// 文件收发缓冲大小
 };
 static struct XYM_Port_t *port = NULL;
 
@@ -128,7 +131,7 @@ static FRESULT xym_file_cache_flush(FIL *fp, uint32_t *filled) {
  */
 static FRESULT xym_file_cache_append(FIL *fp, const uint8_t *data, uint32_t cnt, uint32_t *filled) {
 	if (cnt == 0) return FR_OK;
-	if (*filled + cnt > port->cache_size) {
+	if (*filled + cnt > XYMODEM_FILE_CACHE_SIZE) {
 		if (xym_file_cache_flush(fp, filled) != FR_OK) return FR_INT_ERR;
 	}
 	memcpy(&port->file_cache[*filled], data, cnt);
@@ -149,24 +152,8 @@ static xym_sta_t xym_port_init(void) {
 	port->shell = shellGetCurrent();
 	SHELL_ASSERT(port->shell, return XYM_ERROR_HW);
 
-	/* 从最大连续空闲块扣除保留内存，并按 1024 字节向下对齐。 */
-	HeapStats_t heap_stats;
-	vPortGetHeapStats(&heap_stats);
-	size_t alloc_size = 0;
-	if (heap_stats.xSizeOfLargestFreeBlockInBytes > XYMODEM_RESERVED_MEM) {
-		alloc_size = (heap_stats.xSizeOfLargestFreeBlockInBytes - XYMODEM_RESERVED_MEM) /
-			XYM_PKT_SIZE_1024 * XYM_PKT_SIZE_1024;
-	}
-	/* 至少需要 1 KB 协议包缓冲和 1 KB 文件缓存。 */
-	if (alloc_size < XYM_PKT_SIZE_1024 * 2u) {
-		logPrintln("no enough memory for xymodem file cache");
-		vPortFree(port);
-		port = NULL;
-		return XYM_ERROR_HW;
-	}
-
-	/* 一次分配后切成两个互不重叠的逻辑缓冲，避免堆碎片。 */
-	port->packet_buf = pvPortMalloc(alloc_size);
+	/* 一次分配 1 KB 协议包缓冲和文件缓存，切成两个互不重叠的逻辑缓冲，避免堆碎片。 */
+	port->packet_buf = pvPortMalloc(XYM_PKT_SIZE_1024 + XYMODEM_FILE_CACHE_SIZE);
 	if (port->packet_buf == NULL) {
 		logPrintln("xymodem buffer alloc failed");
 		vPortFree(port);
@@ -174,7 +161,6 @@ static xym_sta_t xym_port_init(void) {
 		return XYM_ERROR_HW;
 	}
 	port->file_cache = &port->packet_buf[XYM_PKT_SIZE_1024];
-	port->cache_size = (uint32_t)(alloc_size - XYM_PKT_SIZE_1024);
 
 	static const struct xym_ops ops = {
 		.send = xymodem_port_send_data,
@@ -241,7 +227,7 @@ static void shell_sx(int argc, char *argv[]) {
 
 	while (sent < fsize) {
 		uint32_t request = fsize - sent;
-		if (request > port->cache_size) request = port->cache_size;
+		if (request > XYMODEM_FILE_CACHE_SIZE) request = XYMODEM_FILE_CACHE_SIZE;
 		if (f_read(fp, port->file_cache, request, &br) != FR_OK || br == 0) {
 			sta = XYM_ERROR_HW;
 			break;
@@ -375,7 +361,7 @@ static void shell_sb(int argc, char *argv[]) {
 		sent = 0;
 		while (sent < fsize) {
 			uint32_t request = fsize - sent;
-			if (request > port->cache_size) request = port->cache_size;
+			if (request > XYMODEM_FILE_CACHE_SIZE) request = XYMODEM_FILE_CACHE_SIZE;
 			if (f_read(fp, port->file_cache, request, &br) != FR_OK || br == 0) {
 				sta = XYM_ERROR_HW;
 				break;

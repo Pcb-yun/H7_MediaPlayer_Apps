@@ -154,9 +154,9 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef* timHandle)
 
   /* USER CODE END TIM23_MspPostInit 0 */
 
-    __HAL_RCC_GPIOF_CLK_ENABLE();
+    __HAL_RCC_GPIOG_CLK_ENABLE();
     /**TIM23 GPIO Configuration
-    PF0     ------> TIM23_CH1
+    PG12     ------> TIM23_CH1
     */
     GPIO_InitStruct.Pin = LCD_Backlight_Pin;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;

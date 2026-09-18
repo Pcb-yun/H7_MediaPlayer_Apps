@@ -22,6 +22,7 @@ extern "C" {
     "  queue    Show queue status\r\n" \
     "  mutex    Show mutex status\r\n" \
     "  event    Show event flags status\r\n" \
+    "  temp     Show system temperature\r\n" \
     "  reboot   Reboot system\r\n" \
     "  update   Update system firmware\r\n" \
     "  error    Manually trigger error"

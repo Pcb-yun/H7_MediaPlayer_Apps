@@ -13,10 +13,10 @@ extern "C" {
 
 #include "xymodem.h"
 
-#define XYMODEM_USE_XMODEM 0    // 启用 Xmodem 协议
-#define XYMODEM_USE_YMODEM 1    // 启用 Ymodem 协议
+#define XYMODEM_USE_XMODEM 0		// 启用 Xmodem 协议
+#define XYMODEM_USE_YMODEM 1		// 启用 Ymodem 协议
 
-#define XYMODEM_RESERVED_MEM (2 * 1024)		// 为系统运行保留的内存
+#define XYMODEM_FILE_CACHE_SIZE (4 * 1024)		// 文件收发缓冲大小
 
 
 

@@ -7,15 +7,13 @@
 #ifndef __LVGL_PORT_H__
 #define __LVGL_PORT_H__
 
-#if __cplusplus
+#ifdef __cplusplus
 extern "C" {
 #endif /* __cplusplus */
 
 #include <stdbool.h>
 
 bool lvgl_port_init(void);
-
-
 
 
 

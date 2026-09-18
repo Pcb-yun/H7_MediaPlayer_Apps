@@ -12,6 +12,7 @@
 #include "Events.h"
 #include "boot.h"
 #include "fatfs.h"
+#include "dts.h"
 #include <string.h>
 
 
@@ -333,6 +334,26 @@ static void OS_Update(uint8_t *path) {
 }
 
 /**
+ * @brief 显示系统温度
+ */
+static void OS_Temp(void) {
+    int32_t temperature = 0;
+
+    if(HAL_DTS_Start(&hdts) != HAL_OK) {
+        logPrintln("DTS start failed");
+        return;
+    }
+
+    if(HAL_DTS_GetTemperature(&hdts, &temperature) != HAL_OK) {
+        logPrintln("DTS measure failed");
+    } else {
+        logPrintln("Temperature: %ld degC", temperature);
+    }
+
+    HAL_DTS_Stop(&hdts);
+}
+
+/**
  * @brief 重启系统
  */
 static void OS_Reboot(void) {
@@ -361,6 +382,8 @@ static void OS_Tool_Shell(int argc, char *argv[]) {
         Mutex_Info();
     } else if(strcmp(argv[1], "event") == 0) {
         Event_Info();
+    } else if(strcmp(argv[1], "temp") == 0) {
+        OS_Temp();
     } else if(strcmp(argv[1], "reboot") == 0) {
         OS_Reboot();
     } else if(strcmp(argv[1], "error") == 0) {

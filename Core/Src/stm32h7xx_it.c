@@ -24,6 +24,9 @@
 /* USER CODE BEGIN Includes */
 #include "usart.h"
 
+/* 将 CubeMX 生成的占位函数改名，真正的异常入口在用户代码区中实现。 */
+#define HardFault_Handler HardFault_Handler_CubeGenerated
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -56,11 +59,47 @@
 static void print_stacked_registers(uint32_t r0, uint32_t r1, uint32_t r2, uint32_t r3,
   uint32_t r12, uint32_t lr, uint32_t pc, uint32_t xpsr);
 static void print_xpsr_analysis(uint32_t xpsr);
+void HardFault_C_Handler(uint32_t *exception_sp, uint32_t exc_return);
+
+/*
+ * 必须在编译器为普通 C 函数建立栈帧之前取得异常栈指针。
+ * 否则在 FreeRTOS 任务中发生故障时，读取 MSP 会得到 HardFault 自身的栈帧。
+ */
+#undef HardFault_Handler
+#if defined(__CC_ARM)
+__asm void HardFault_Handler(void)
+{
+  IMPORT HardFault_C_Handler
+  TST     LR, #4
+  ITE     EQ
+  MRSEQ   R0, MSP
+  MRSNE   R0, PSP
+  MOV     R1, LR
+  B       HardFault_C_Handler
+}
+#elif defined(__GNUC__) || defined(__clang__)
+__attribute__((naked)) void HardFault_Handler(void)
+{
+  __asm volatile
+  (
+    "tst lr, #4        \n"
+    "ite eq            \n"
+    "mrseq r0, msp     \n"
+    "mrsne r0, psp     \n"
+    "mov r1, lr        \n"
+    "b HardFault_C_Handler\n"
+  );
+}
+#else
+#error "当前编译器缺少 HardFault 裸函数入口实现"
+#endif
+#define HardFault_Handler HardFault_Handler_CubeGenerated
 
 /* USER CODE END 0 */
 
 /* External variables --------------------------------------------------------*/
 extern DMA2D_HandleTypeDef hdma2d;
+extern MDMA_HandleTypeDef hmdma_mdma_channel10_sw_0;
 extern DMA_HandleTypeDef hdma_sai1_a;
 extern SAI_HandleTypeDef hsai_BlockA1;
 extern SD_HandleTypeDef hsd1;
@@ -162,140 +201,6 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-  my_printf("\r\n============================================================\r\n"
-            "  [CRITICAL] HardFault Handler Triggered\r\n"
-            "============================================================\r\n\r\n");
-
-  uint32_t *hardfault_args;
-  uint32_t stacked_r0, stacked_r1, stacked_r2, stacked_r3;
-  uint32_t stacked_r12, stacked_lr, stacked_pc, stacked_xpsr;
-  uint32_t cfsr, hfsr, dfsr, afsr, bfar, mmfar;
-
-  hardfault_args = (uint32_t *)__get_MSP();
-
-  stacked_r0  = hardfault_args[0];
-  stacked_r1  = hardfault_args[1];
-  stacked_r2  = hardfault_args[2];
-  stacked_r3  = hardfault_args[3];
-  stacked_r12 = hardfault_args[4];
-  stacked_lr  = hardfault_args[5];
-  stacked_pc  = hardfault_args[6];
-  stacked_xpsr = hardfault_args[7];
-
-  cfsr   = *(volatile uint32_t *)0xE000ED28;
-  hfsr   = *(volatile uint32_t *)0xE000ED2C;
-  dfsr   = *(volatile uint32_t *)0xE000ED30;
-  afsr   = *(volatile uint32_t *)0xE000ED3C;
-  bfar   = *(volatile uint32_t *)0xE000ED38;
-  mmfar  = *(volatile uint32_t *)0xE000ED34;
-
-  print_stacked_registers(stacked_r0, stacked_r1, stacked_r2, stacked_r3,
-                  stacked_r12, stacked_lr, stacked_pc, stacked_xpsr);
-
-  my_printf("--- Fault Status Registers -----------------------------------\r\n"
-            "  CFSR  = 0x%08lX\r\n"
-            "  HFSR  = 0x%08lX\r\n"
-            "  DFSR  = 0x%08lX\r\n"
-            "  AFSR  = 0x%08lX\r\n"
-            "  BFAR  = 0x%08lX\r\n"
-            "  MMFAR = 0x%08lX\r\n\r\n"
-            "--- Fault Analysis --------------------------------------------\r\n",
-          cfsr, hfsr, dfsr, afsr, bfar, mmfar);
-
-  if (cfsr & 0x00800000) {
-    my_printf("  [MemManage] MemManage Fault also occurred\r\n");
-    if (cfsr & 0x00008000) {
-      my_printf("    -> MMARVALID: MMFAR (0x%08lX) holds valid fault address\r\n", mmfar);
-    }
-    if (cfsr & 0x00000001) {
-      my_printf("    -> IACCVIOL: Instruction access violation\r\n");
-    }
-    if (cfsr & 0x00000002) {
-      my_printf("    -> DACCVIOL: Data access violation\r\n");
-    }
-    if (cfsr & 0x00000008) {
-      my_printf("    -> MUNSTKERR: Unstacking error\r\n");
-    }
-    if (cfsr & 0x00000010) {
-      my_printf("    -> MSTKERR: Stacking error\r\n");
-    }
-    if (cfsr & 0x00000020) {
-      my_printf("    -> MLSPERR: FP lazy state preservation error\r\n");
-    }
-  }
-
-  if (cfsr & 0x00008000) {
-      my_printf("  [BusFault] Bus Fault also occurred\r\n");
-    if (cfsr & 0x00004000) {
-      my_printf("    -> BFARVALID: BFAR (0x%08lX) holds valid fault address\r\n", bfar);
-    }
-    if (cfsr & 0x00000100) {
-      my_printf("    -> IBUSERR: Instruction bus error\r\n");
-    }
-    if (cfsr & 0x00000200) {
-      my_printf("    -> PRECISERR: Precise data bus error\r\n");
-    }
-    if (cfsr & 0x00000400) {
-      my_printf("    -> IMPRECISERR: Imprecise data bus error\r\n");
-    }
-    if (cfsr & 0x00000800) {
-      my_printf("    -> UNSTKERR: Unstacking error\r\n");
-    }
-    if (cfsr & 0x00001000) {
-      my_printf("    -> STKERR: Stacking error\r\n");
-    }
-    if (cfsr & 0x00002000) {
-      my_printf("    -> LSPERR: FP lazy state preservation error\r\n");
-    }
-  }
-
-  if (cfsr & 0x00010000) {
-      my_printf("  [UsageFault] Usage Fault also occurred\r\n");
-    if (cfsr & 0x00010000) {
-      my_printf("    -> UNDEFINSTR: Undefined instruction\r\n");
-    }
-    if (cfsr & 0x00020000) {
-      my_printf("    -> INVSTATE: Invalid state\r\n");
-    }
-    if (cfsr & 0x00040000) {
-      my_printf("    -> INVPC: Invalid PC load\r\n");
-    }
-    if (cfsr & 0x00080000) {
-      my_printf("    -> NOCP: No coprocessor\r\n");
-    }
-    if (cfsr & 0x00100000) {
-      my_printf("    -> UNALIGNED: Unaligned access\r\n");
-    }
-    if (cfsr & 0x00200000) {
-      my_printf("    -> DIVBYZERO: Divide by zero\r\n");
-    }
-  }
-
-  if (hfsr & 0x40000000) {
-    my_printf("  [HardFault] FORCED: Escalated from configurable fault\r\n");
-  }
-  if (hfsr & 0x80000000) {
-    my_printf("  [HardFault] DEBUGEVT: Debug event\r\n");
-  }
-
-  my_printf("\r\n--- Fault Context Information --------------------------------\r\n");
-  my_printf("\r\n--- Fault Context Information --------------------------------\r\n"
-            "  Program Counter (PC) = 0x%08lX\r\n"
-            "  Link Register (LR)   = 0x%08lX\r\n"
-            "  Stack Pointer (MSP)  = 0x%08lX\r\n",
-    stacked_pc, stacked_lr, (uint32_t)hardfault_args);
-  if (bfar != 0) {
-    my_printf("  Bus Fault Address    = 0x%08lX\r\n", bfar);
-  }
-  if (mmfar != 0) {
-    my_printf("  MemManage Address    = 0x%08lX\r\n", mmfar);
-  }
-
-  print_xpsr_analysis(stacked_xpsr);
-  my_printf("============================================================\r\n"
-            "  [FATAL] System halted due to HardFault exception\r\n"
-            "============================================================\r\n");
-  Error_Handler();
 
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
@@ -763,6 +668,20 @@ void DMA2D_IRQHandler(void)
 }
 
 /**
+  * @brief This function handles MDMA global interrupt.
+  */
+void MDMA_IRQHandler(void)
+{
+  /* USER CODE BEGIN MDMA_IRQn 0 */
+
+  /* USER CODE END MDMA_IRQn 0 */
+  HAL_MDMA_IRQHandler(&hmdma_mdma_channel10_sw_0);
+  /* USER CODE BEGIN MDMA_IRQn 1 */
+
+  /* USER CODE END MDMA_IRQn 1 */
+}
+
+/**
   * @brief This function handles BDMA channel4 global interrupt.
   */
 void BDMA_Channel4_IRQHandler(void)
@@ -791,17 +710,136 @@ static void print_stacked_registers(uint32_t r0, uint32_t r1, uint32_t r2, uint3
 
 static void print_xpsr_analysis(uint32_t xpsr) {
   my_printf("\r\n--- xPSR Analysis -------------------------------------------\r\n"
-            "  [xPSR] C: Carry flag set\r\n"
-            "  [xPSR] Z: Zero flag set\r\n"
-            "  [xPSR] N: Negative flag set\r\n"
-            "  [xPSR] V: Overflow flag set\r\n"
-            "  [xPSR] Q: Saturation flag set\r\n"
+            "  [xPSR] N: %s\r\n"
+            "  [xPSR] Z: %s\r\n"
+            "  [xPSR] C: %s\r\n"
+            "  [xPSR] V: %s\r\n"
+            "  [xPSR] Q: %s\r\n"
             "  [xPSR] Thumb bit: %s\r\n"
-            "  [xPSR] Exception Number: %lu\r\n"
-            "  [xPSR] IPSR (Interrupt Program Status): %u\r\n\r\n",
-            (xpsr & 0x01000000) ? "Set (Thumb mode)" : "Clear",
-            (xpsr & 0x000001FF),
-            (uint8_t)(xpsr & 0x000000FF));
+            "  [xPSR] Stack alignment padding: %s\r\n"
+            "  [xPSR] Exception number: %lu\r\n\r\n",
+            (xpsr & 0x80000000UL) ? "Set" : "Clear",
+            (xpsr & 0x40000000UL) ? "Set" : "Clear",
+            (xpsr & 0x20000000UL) ? "Set" : "Clear",
+            (xpsr & 0x10000000UL) ? "Set" : "Clear",
+            (xpsr & 0x08000000UL) ? "Set" : "Clear",
+            (xpsr & 0x01000000UL) ? "Set (Thumb mode)" : "Clear (invalid)",
+            (xpsr & 0x00000200UL) ? "Present" : "None",
+            xpsr & 0x000001FFUL);
+}
+
+/**
+ * @brief 输出 HardFault 现场并停止系统
+ * @param exception_sp 异常入口选出的 MSP 或 PSP
+ * @param exc_return 异常入口时 LR 中的 EXC_RETURN
+ */
+void HardFault_C_Handler(uint32_t *exception_sp, uint32_t exc_return)
+{
+  uint32_t *core_frame;
+  uint32_t cfsr;
+  uint32_t hfsr;
+  uint32_t dfsr;
+  uint32_t afsr;
+  uint32_t abfsr;
+  uint32_t mmfar;
+  uint32_t bfar;
+  uint32_t shcsr;
+  uint32_t stack_error;
+
+  cfsr = SCB->CFSR;
+  hfsr = SCB->HFSR;
+  dfsr = SCB->DFSR;
+  afsr = SCB->AFSR;
+  mmfar = SCB->MMFAR;
+  bfar = SCB->BFAR;
+  shcsr = SCB->SHCSR;
+  abfsr = *(volatile uint32_t *)0xE000EFA8UL;
+
+  my_printf("\r\n============================================================\r\n"
+            "  [CRITICAL] HardFault Handler Triggered\r\n"
+            "============================================================\r\n\r\n"
+            "--- Exception Entry -----------------------------------------\r\n"
+            "  EXC_RETURN = 0x%08lX\r\n"
+            "  Stack       = %s\r\n"
+            "  Return mode = %s\r\n"
+            "  FP frame    = %s\r\n"
+            "  Raw SP      = 0x%08lX\r\n\r\n",
+            exc_return,
+            (exc_return & (1UL << 2)) ? "PSP" : "MSP",
+            (exc_return & (1UL << 3)) ? "Thread" : "Handler",
+            (exc_return & (1UL << 4)) ? "Basic" : "Extended",
+            (uint32_t)exception_sp);
+
+  my_printf("--- Fault Status Registers ----------------------------------\r\n"
+            "  CFSR  = 0x%08lX\r\n"
+            "  HFSR  = 0x%08lX\r\n"
+            "  DFSR  = 0x%08lX\r\n"
+            "  AFSR  = 0x%08lX\r\n"
+            "  ABFSR = 0x%08lX\r\n"
+            "  SHCSR = 0x%08lX\r\n"
+            "  BFAR  = 0x%08lX%s\r\n"
+            "  MMFAR = 0x%08lX%s\r\n\r\n"
+            "--- Fault Analysis ------------------------------------------\r\n",
+            cfsr, hfsr, dfsr, afsr, abfsr, shcsr,
+            bfar, (cfsr & 0x00008000UL) ? " (valid)" : " (invalid)",
+            mmfar, (cfsr & 0x00000080UL) ? " (valid)" : " (invalid)");
+
+  if (hfsr & 0x00000002UL) my_printf("  [HardFault] VECTTBL: vector table read fault\r\n");
+  if (hfsr & 0x40000000UL) my_printf("  [HardFault] FORCED: configurable fault escalated\r\n");
+  if (hfsr & 0x80000000UL) my_printf("  [HardFault] DEBUGEVT: debug event\r\n");
+
+  if (cfsr & 0x000000FFUL) my_printf("  [MemManage] Memory management fault\r\n");
+  if (cfsr & 0x00000001UL) my_printf("    -> IACCVIOL: instruction access violation\r\n");
+  if (cfsr & 0x00000002UL) my_printf("    -> DACCVIOL: data access violation\r\n");
+  if (cfsr & 0x00000008UL) my_printf("    -> MUNSTKERR: exception unstacking failed\r\n");
+  if (cfsr & 0x00000010UL) my_printf("    -> MSTKERR: exception stacking failed\r\n");
+  if (cfsr & 0x00000020UL) my_printf("    -> MLSPERR: floating-point lazy stacking failed\r\n");
+
+  if (cfsr & 0x0000FF00UL) my_printf("  [BusFault] Bus fault\r\n");
+  if (cfsr & 0x00000100UL) my_printf("    -> IBUSERR: instruction bus error\r\n");
+  if (cfsr & 0x00000200UL) my_printf("    -> PRECISERR: precise data bus error\r\n");
+  if (cfsr & 0x00000400UL) my_printf("    -> IMPRECISERR: imprecise data bus error\r\n");
+  if (cfsr & 0x00000800UL) my_printf("    -> UNSTKERR: exception unstacking failed\r\n");
+  if (cfsr & 0x00001000UL) my_printf("    -> STKERR: exception stacking failed\r\n");
+  if (cfsr & 0x00002000UL) my_printf("    -> LSPERR: floating-point lazy stacking failed\r\n");
+
+  if (cfsr & 0xFFFF0000UL) my_printf("  [UsageFault] Usage fault\r\n");
+  if (cfsr & 0x00010000UL) my_printf("    -> UNDEFINSTR: undefined instruction\r\n");
+  if (cfsr & 0x00020000UL) my_printf("    -> INVSTATE: invalid execution state\r\n");
+  if (cfsr & 0x00040000UL) my_printf("    -> INVPC: invalid exception return\r\n");
+  if (cfsr & 0x00080000UL) my_printf("    -> NOCP: coprocessor access denied\r\n");
+  if (cfsr & 0x00100000UL) my_printf("    -> STKOF: stack overflow\r\n");
+  if (cfsr & 0x01000000UL) my_printf("    -> UNALIGNED: unaligned memory access\r\n");
+  if (cfsr & 0x02000000UL) my_printf("    -> DIVBYZERO: divide by zero\r\n");
+
+  /* 扩展浮点异常帧的前 18 个字是 S0-S15、FPSCR 和保留字。 */
+  core_frame = exception_sp;
+  if ((exc_return & (1UL << 4)) == 0U) {
+    core_frame += 18;
+  }
+
+  /* 压栈失败时异常帧不可信，继续解引用可能造成二次故障并锁死内核。 */
+  stack_error = cfsr & (0x00000010UL | 0x00001000UL);
+  if ((stack_error == 0U) && (((uint32_t)core_frame & 0x3UL) == 0U)) {
+    my_printf("\r\n--- Fault Context --------------------------------------------\r\n"
+              "  Core frame SP = 0x%08lX\r\n",
+              (uint32_t)core_frame);
+    print_stacked_registers(core_frame[0], core_frame[1], core_frame[2], core_frame[3],
+                            core_frame[4], core_frame[5], core_frame[6], core_frame[7]);
+    print_xpsr_analysis(core_frame[7]);
+  } else {
+    my_printf("\r\n--- Fault Context --------------------------------------------\r\n"
+              "  Exception frame unavailable because stacking failed\r\n");
+  }
+
+  my_printf("============================================================\r\n"
+            "  [FATAL] System halted due to HardFault exception\r\n"
+            "============================================================\r\n");
+
+  __disable_irq();
+  while (1) {
+    __NOP();
+  }
 }
 
 /* USER CODE END 1 */

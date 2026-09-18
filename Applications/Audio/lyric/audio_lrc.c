@@ -14,6 +14,8 @@
 static lrcdata_t g_lrcdata;
 static lrc_t cur_line;        // 当前返回的歌词行
 static uint32_t last_ms = 0;  // 上次查询时间(ms), 检测进度回退
+static uint8_t s_raw_buf[256]; // 当前原词文本(提取后, 跳过逐字时间戳)
+static uint8_t s_tras_buf[256]; // 当前翻译文本(提取后)
 
 
 /**
@@ -25,9 +27,6 @@ static uint32_t last_ms = 0;  // 上次查询时间(ms), 检测进度回退
  */
 static __attribute__((section(".ITCM")))
 uint32_t parse_line(uint8_t *buf, uint32_t size, uint32_t ptr) {
-    static uint8_t s_raw_buf[256];          // 当前原词文本(提取后, 跳过逐字时间戳)
-    static uint8_t s_tras_buf[256];         // 当前翻译文本(提取后)
-
     uint16_t mm = 0, ss = 0;
 	uint8_t xx = 0;
 	uint16_t rlen = 0, tlen = 0;

@@ -73,7 +73,7 @@ extern unsigned long getRunTimeCounterValue(void);
 #define configUSE_SB_COMPLETED_CALLBACK          ( 0 )
 #define configUSE_MINI_LIST_ITEM                ( 1 )
 #define configMINIMAL_STACK_SIZE                 ((uint16_t)64)
-#define configTOTAL_HEAP_SIZE                    ((size_t)278528)
+#define configTOTAL_HEAP_SIZE                    ((size_t)322560)
 #define configMAX_TASK_NAME_LEN                  ( 16 )
 #define configGENERATE_RUN_TIME_STATS            1
 #define configHEAP_CLEAR_MEMORY_ON_FREE          0
@@ -183,6 +183,15 @@ standard names. */
 
 /* USER CODE BEGIN Defines */
 /* Section where parameter definitions can be added (for instance, to override default ones in FreeRTOS.h) */
+
+extern void lv_freertos_task_switch_in(const char *name);
+extern void lv_freertos_task_switch_out(void);
+
+// 任务切换时的回调函数
+#define traceTASK_SWITCHED_IN() lv_freertos_task_switch_in(pxCurrentTCB->pcTaskName)
+// 任务切换出的回调函数
+#define traceTASK_SWITCHED_OUT() lv_freertos_task_switch_out()
+
 /* USER CODE END Defines */
 
 #endif /* FREERTOS_CONFIG_H */

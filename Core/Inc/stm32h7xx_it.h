@@ -61,6 +61,7 @@ void TIM6_DAC_IRQHandler(void);
 void SPI6_IRQHandler(void);
 void SAI1_IRQHandler(void);
 void DMA2D_IRQHandler(void);
+void MDMA_IRQHandler(void);
 void BDMA_Channel4_IRQHandler(void);
 /* USER CODE BEGIN EFP */
 

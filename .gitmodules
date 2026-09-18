@@ -13,6 +13,6 @@
 	path = Drivers/User/W25QXX
 	url = https://github.com/libdriver/w25qxx.git
 	branch = main
-[submodule "Drivers/User/ARM_2D"]
-	path = Drivers/User/ARM_2D
-	url = https://github.com/ARM-software/Arm-2D.git
+[submodule "Applications/lvgl/H7_MediaPlayer_UI"]
+	path = Applications/lvgl/H7_MediaPlayer_UI/
+	url = https://github.com/Pcb-yun/H7_MediaPlayer_UI.git

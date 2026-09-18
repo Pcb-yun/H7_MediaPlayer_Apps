@@ -21,6 +21,7 @@
 #include "spi.h"
 
 /* USER CODE BEGIN 0 */
+#include "lv_port_disp.h"
 
 /* USER CODE END 0 */
 
@@ -163,6 +164,27 @@ void HAL_SPI_MspDeInit(SPI_HandleTypeDef* spiHandle)
 }
 
 /* USER CODE BEGIN 1 */
+
+/**
+ * @brief SPI6 传输完成回调函数
+ * @param hspi spi 句柄
+ */
+void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi) {
+    if ((hspi->Instance == SPI6)) {
+      disp_refresh_cplt();
+    }
+}
+
+/**
+ * @brief SPI6 错误回调函数
+ * @param hspi spi 句柄
+ */
+void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi) {
+    if ((hspi->Instance == SPI6)) {
+
+
+    }
+}
 
 /* USER CODE END 1 */
 

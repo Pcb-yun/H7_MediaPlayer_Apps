@@ -44,7 +44,8 @@ typedef enum {
 /**
  * @brief 获取统一结果的可读文本
  */
-static const char *audio_res_str(audio_res_t res) {
+static const __attribute__((section(".W25Q64")))
+char *audio_res_str(audio_res_t res) {
 	switch (res) {
 		case AUDIO_RES_OK: return "ok";
 		case AUDIO_RES_EOF: return "end of stream";

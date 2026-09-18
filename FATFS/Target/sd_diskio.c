@@ -75,7 +75,7 @@ See BSP_SD_ErrorCallback() and BSP_SD_AbortCallback() below
  * Notice: This is applicable only for cortex M7 based platform.
  */
 /* USER CODE BEGIN enableSDDmaCacheMaintenance */
-/* #define ENABLE_SD_DMA_CACHE_MAINTENANCE  1 */
+#define ENABLE_SD_DMA_CACHE_MAINTENANCE  1
 /* USER CODE END enableSDDmaCacheMaintenance */
 
 /*
@@ -84,7 +84,7 @@ See BSP_SD_ErrorCallback() and BSP_SD_AbortCallback() below
 * transfer data
 */
 /* USER CODE BEGIN enableScratchBuffer */
-/* #define ENABLE_SCRATCH_BUFFER */
+#define ENABLE_SCRATCH_BUFFER
 /* USER CODE END enableScratchBuffer */
 
 /* Private variables ---------------------------------------------------------*/
@@ -397,6 +397,34 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 
 /* USER CODE BEGIN beforeWriteSection */
 /* can be used to modify previous code / undefine following code / add new code */
+
+/**
+  * @brief 将数据复制到 SD DMA 临时缓冲并写回数据缓存
+  * @param dst DMA 临时缓冲区，必须按缓存行对齐
+  * @param src 待写入数据
+  * @param size 数据长度
+  * @return 目标缓冲区地址
+  */
+static void *SD_CopyToDmaScratch(void *dst, const void *src, size_t size)
+{
+  void *result = memcpy(dst, src, size);
+
+#if (ENABLE_SD_DMA_CACHE_MAINTENANCE == 1)
+  SCB_CleanDCache_by_Addr((uint32_t *)dst, (int32_t)size);
+  __DSB();
+#endif
+
+  return result;
+}
+
+/*
+ * 以下宏仅作用于 CubeMX 生成的 SD_write()：
+ * 1. 慢速路径复制后立即清理 DMA 临时缓冲的缓存；
+ * 2. 写操作等待写完成消息，而不是误等待读完成消息。
+ */
+#define memcpy(dst, src, size) SD_CopyToDmaScratch((dst), (src), (size))
+#undef READ_CPLT_MSG
+#define READ_CPLT_MSG WRITE_CPLT_MSG
 /* USER CODE END beforeWriteSection */
 /**
   * @brief  Writes Sector(s)
@@ -565,7 +593,10 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
  #endif /* _USE_WRITE == 1 */
 
 /* USER CODE BEGIN beforeIoctlSection */
-/* can be used to modify previous code / undefine following code / add new code */
+/* 恢复宏定义，避免影响后续读完成回调和其它代码。 */
+#undef memcpy
+#undef READ_CPLT_MSG
+#define READ_CPLT_MSG      (uint32_t) 1
 /* USER CODE END beforeIoctlSection */
 /**
   * @brief  I/O control operation

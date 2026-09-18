@@ -19,7 +19,7 @@
 #include <stdbool.h>
 
 Shell shell;
-char shellBuffer[SHELL_BUFFER_SIZE] __attribute__((section(".DTCM")));
+char shellBuffer[SHELL_BUFFER_SIZE];
 
 /**
  * @brief 用户shell写

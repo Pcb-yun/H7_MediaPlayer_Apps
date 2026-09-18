@@ -21,6 +21,21 @@
 #include "dma2d.h"
 
 /* USER CODE BEGIN 0 */
+#include "lvgl.h"
+
+#if LV_USE_DRAW_DMA2D_INTERRUPT
+/**
+ * @brief DMA2D传输完成回调函数
+ * @param hdma2d DMA2D句柄指针
+ */
+static __attribute__((section(".ITCM")))
+void dma2d_xfer_cplt_cb(DMA2D_HandleTypeDef *hdma2d) {
+  (void)hdma2d;
+
+  extern void lv_draw_dma2d_transfer_complete_interrupt_handler(void);
+  lv_draw_dma2d_transfer_complete_interrupt_handler();
+}
+#endif
 
 /* USER CODE END 0 */
 
@@ -35,6 +50,9 @@ void MX_DMA2D_Init(void)
   /* USER CODE END DMA2D_Init 0 */
 
   /* USER CODE BEGIN DMA2D_Init 1 */
+#if LV_USE_DRAW_DMA2D_INTERRUPT
+  hdma2d.XferCpltCallback = dma2d_xfer_cplt_cb;
+#endif
 
   /* USER CODE END DMA2D_Init 1 */
   hdma2d.Instance = DMA2D;

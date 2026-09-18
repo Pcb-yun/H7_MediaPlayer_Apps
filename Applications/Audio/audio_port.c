@@ -54,6 +54,14 @@ static audio_port_t* g_port = NULL;			// 当前播放器实例
 static uint8_t volume = AUDIO_DEFAULT_VOLUME; // 音量(0-100)
 static audio_res_t audio_set_freq(uint32_t sample_rate);
 
+/**
+ * @brief 清理DMA半区缓存
+ * @param tx DMA半区缓存指针
+ */
+static void audio_dma_clean_buffer(const uint32_t *tx) {
+	SCB_CleanDCache_by_Addr((void *)tx, (int32_t)(g_port->tx_size * sizeof(uint32_t)));
+}
+
 
 /**
  * @brief 小端32位读取
@@ -212,7 +220,6 @@ static void port_on_meta(void *user, const audio_meta_block_t *block) {
  */
 static uint32_t audio_calc_frames(uint8_t channels, uint32_t sample_rate) {
 	HeapStats_t stats;
-	size_t largest;
 	uint32_t bytes_per_frame;
 	uint32_t capacity;
 	uint32_t dma_capacity;
@@ -220,14 +227,12 @@ static uint32_t audio_calc_frames(uint8_t channels, uint32_t sample_rate) {
 	uint32_t frames;
 
 	vPortGetHeapStats(&stats);
-	// heap_4按连续块分配, 用最大空闲块而非总空闲(总空闲可能被碎片分成多块)
-	largest = stats.xSizeOfLargestFreeBlockInBytes;
-	if (largest <= AUDIO_RESERVED_MEM) return 0;
 
 	// PCM保留原声道数, SAI始终输出AUDIO_PLAY_CH声道的双缓冲。
 	bytes_per_frame = channels * sizeof(int16_t) +
 		2u * AUDIO_PLAY_CH * sizeof(uint32_t);
-	capacity = (uint32_t)((largest - AUDIO_RESERVED_MEM) / bytes_per_frame);
+	// heap_4按连续块分配, 用最大空闲块而非总空闲(总空闲可能被碎片分成多块)
+	capacity = (uint32_t)(stats.xSizeOfLargestFreeBlockInBytes / bytes_per_frame);
 
 	/*
 	 * HAL_SAI_Transmit_DMA() 的 Size 为 uint16_t，且长度单位是32位slot。
@@ -241,6 +246,7 @@ static uint32_t audio_calc_frames(uint8_t channels, uint32_t sample_rate) {
 	min_frames = (min_frames + 3u) & ~3u;
 	if (capacity < min_frames) return 0;
 
+	// 按目标时长计算所需帧数, 连续块不足时收缩到可承载帧数
 	frames = (sample_rate * AUDIO_BUFFER_TARGET_MS + 999u) / 1000u;
 	if (frames > capacity) frames = capacity;
 	frames &= ~3u;   // 向下取整到4的倍数, 保持声道对齐
@@ -456,10 +462,12 @@ static audio_res_t audio_fill_buf(uint32_t* tx, uint32_t *frames_read) {
 	*frames_read = n;
 	if (res != AUDIO_RES_OK && res != AUDIO_RES_EOF) {
 		memset(tx, 0, g_port->tx_size * sizeof(uint32_t));
+		audio_dma_clean_buffer(tx);
 		return res;
 	}
 	if (n == 0) {
 		memset(tx, 0, g_port->tx_size * sizeof(uint32_t));
+		audio_dma_clean_buffer(tx);
 		return AUDIO_RES_EOF;
 	}
 
@@ -486,6 +494,7 @@ static audio_res_t audio_fill_buf(uint32_t* tx, uint32_t *frames_read) {
 	if (samples < g_port->tx_size) {
 		memset(tx + samples, 0, (g_port->tx_size - samples) * sizeof(uint32_t));
 	}
+	audio_dma_clean_buffer(tx);
 	return AUDIO_RES_OK;
 }
 
@@ -866,6 +875,7 @@ audio, audio, Audio Player);
  * @brief SAI DMA半区传输完成回调
  * @param hsai SAI句柄
  */
+__attribute__((section(".ITCM")))
 void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef* hsai) {
 	if (hsai->Instance == SAI1_Block_A && g_port != NULL &&
 		g_port->sem != NULL && g_port->dma_running) {
@@ -877,6 +887,7 @@ void HAL_SAI_TxHalfCpltCallback(SAI_HandleTypeDef* hsai) {
  * @brief SAI DMA整区传输完成回调
  * @param hsai SAI句柄
  */
+__attribute__((section(".ITCM")))
 void HAL_SAI_TxCpltCallback(SAI_HandleTypeDef* hsai) {
 	if (hsai->Instance == SAI1_Block_A && g_port != NULL &&
 		g_port->sem != NULL && g_port->dma_running) {

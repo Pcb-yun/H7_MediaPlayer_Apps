@@ -11,3 +11,4 @@
 ## 相关项目
 
 - Bootloader 工程：[H7_Bootloader](https://github.com/Pcb-yun/H7_Bootloader.git)
+- MediaPlayer 界面工程：[H7_MediaPlayer_UI](https://github.com/Pcb-yun/H7_MediaPlayer_UI.git)

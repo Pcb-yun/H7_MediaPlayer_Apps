@@ -23,6 +23,7 @@
 #include "bdma.h"
 #include "dma.h"
 #include "fatfs.h"
+#include "mdma.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -58,6 +59,7 @@
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+static void MPU_Config(void);
 void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 
@@ -65,6 +67,39 @@ void MX_FREERTOS_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+/**
+  * @brief 用户MPU配置
+  */
+static void MPU_USER_Config(void)
+{
+  MPU_Region_InitTypeDef MPU_InitStruct = {0};
+
+  HAL_MPU_Disable();
+
+  MPU_InitStruct.Enable = MPU_REGION_ENABLE;                    // 启用MPU区域
+  MPU_InitStruct.Number = MPU_REGION_NUMBER3;                   // 配置D2 SRAM
+  MPU_InitStruct.BaseAddress = 0x30000000;                      // D2 SRAM基地址
+  MPU_InitStruct.Size = MPU_REGION_SIZE_32KB;                   // D2 SRAM大小
+  MPU_InitStruct.SubRegionDisable = 0x0;                        // 禁用所有子区域
+  MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL1;                 // 配置为TEX_LEVEL1
+  MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;     // 配置为可执行、可读写、可缓存、非共享
+  MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;  // 禁用指令访问
+  MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;            // 共享访问
+  MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;        // 不缓存访问
+  MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;      // 不缓冲访问
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+
+  MPU_InitStruct.Number = MPU_REGION_NUMBER4;                   // 配置D3 SRAM
+  MPU_InitStruct.BaseAddress = 0x38000000;                      // D3 SRAM基地址
+  MPU_InitStruct.Size = MPU_REGION_SIZE_16KB;                   // D3 SRAM大小
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+
+  MPU_InitStruct.Number = MPU_REGION_NUMBER5;                   // 配置备份SRAM
+  MPU_InitStruct.BaseAddress = 0x38800000;                      // 备份SRAM基地址
+  MPU_InitStruct.Size = MPU_REGION_SIZE_4KB;                    // 备份SRAM大小
+  HAL_MPU_ConfigRegion(&MPU_InitStruct);
+}
 
 /* USER CODE END 0 */
 
@@ -76,13 +111,20 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
+  MPU_USER_Config();
 
   /* USER CODE END 1 */
+
+  /* MPU Configuration--------------------------------------------------------*/
+  MPU_Config();
 
   /* Enable the CPU Cache */
 
   /* Enable I-Cache---------------------------------------------------------*/
   SCB_EnableICache();
+
+  /* Enable D-Cache---------------------------------------------------------*/
+  SCB_EnableDCache();
 
   /* MCU Configuration--------------------------------------------------------*/
 
@@ -104,6 +146,7 @@ int main(void)
   MX_GPIO_Init();
   MX_BDMA_Init();
   MX_DMA_Init();
+  MX_MDMA_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
   // HAL_Delay(500); // 等待调试器初始化
@@ -202,6 +245,19 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 
 /* USER CODE END 4 */
+
+ /* MPU Configuration */
+
+void MPU_Config(void)
+{
+
+  /* Disables the MPU */
+  HAL_MPU_Disable();
+
+  /* Enables the MPU */
+  HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+
+}
 
 /**
   * @brief  Period elapsed callback in non blocking mode
