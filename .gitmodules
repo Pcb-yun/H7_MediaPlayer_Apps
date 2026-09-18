@@ -14,5 +14,5 @@
 	url = https://github.com/libdriver/w25qxx.git
 	branch = main
 [submodule "Applications/lvgl/H7_MediaPlayer_UI"]
-	path = Applications/lvgl/H7_MediaPlayer_UI/
+	path = Applications/lvgl/H7_MediaPlayer_UI
 	url = https://github.com/Pcb-yun/H7_MediaPlayer_UI.git
